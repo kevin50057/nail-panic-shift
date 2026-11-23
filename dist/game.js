@@ -206,15 +206,15 @@ const MBASS=[38,38,34,33],MCHUG=[1,0,1,1, 1,0,1,0, 1,0,1,1, 1,0,1,1],MOCT=[0,0,0
 const MLEAD=[69,0,74,0,77,76,74,73, 74,0,69,0,70,0,69,0, 69,0,74,0,77,79,81,0, 82,81,79,77,76,0,73,0];
 function mOsc(f,t,dur,type,vol,dest,to,det=0){const o=ac.createOscillator(),g=ac.createGain();o.type=type;o.frequency.setValueAtTime(f,t);o.detune.value=det;if(to)o.frequency.exponentialRampToValueAtTime(to,t+dur);
   g.gain.setValueAtTime(0.0001,t);g.gain.exponentialRampToValueAtTime(vol,t+0.005);g.gain.exponentialRampToValueAtTime(0.0001,t+dur);o.connect(g);g.connect(dest);o.start(t);o.stop(t+dur+0.02)}
-function mNoise(t,dur,vol,type,f,q,to,att=0.003){const s=ac.createBufferSource(),fl=ac.createBiquadFilter(),g=ac.createGain();s.buffer=nb;fl.type=type;fl.frequency.setValueAtTime(f,t);if(to)fl.frequency.exponentialRampToValueAtTime(to,t+dur);fl.Q.value=q;
+function mNoise(t,dur,vol,type,f,q=1,to,att=0.003){const s=ac.createBufferSource(),fl=ac.createBiquadFilter(),g=ac.createGain();s.buffer=nb;fl.type=type;fl.frequency.setValueAtTime(f,t);if(to)fl.frequency.exponentialRampToValueAtTime(to,t+dur);fl.Q.value=q;
   g.gain.setValueAtTime(0.0001,t);g.gain.exponentialRampToValueAtTime(vol,t+att);g.gain.exponentialRampToValueAtTime(0.0001,t+dur);s.connect(fl);fl.connect(g);g.connect(MUS.g);s.start(t,Math.random()*0.5);s.stop(t+dur+0.02)}
 function mStep(i,t,ten,s16){const st=i%16,bar=Math.floor(i/16)%4,root=MBASS[bar],G1=MUS.g,dark=G.mod==="blackout";
   // 活塞低音
-  if(MCHUG[st])mOsc(mf(root+MOCT[st]),t,s16*0.9,"sawtooth",0.11,MUS.lp,null,st%2?6:-6);
+  if(MCHUG[st]){mOsc(mf(root+MOCT[st]),t,s16*0.9,"sawtooth",0.065,MUS.lp,null,st%2?6:-6);mOsc(mf(root+12+MOCT[st]),t,s16*0.7,"square",0.06,MUS.lp)}
   // 汽缸重拍（第 1、9 格；緊張時多兩下）
-  if(st===0||st===8||(ten>0.3&&(st===6||st===14)))mOsc(130,t,0.2,"sine",0.5,G1,38);
+  if(st===0||st===8||(ten>0.3&&(st===6||st===14))){mOsc(130,t,0.16,"sine",0.22,G1,45);mNoise(t,0.015,0.2,"lowpass",2800)}
   // 鐵砧／齒輪敲擊（第 5、13 格）：兩個不和諧方波＋高頻噪音
-  if(st===4||st===12){mOsc(1170,t,0.07,"square",0.03,G1);mOsc(1637,t,0.05,"square",0.02,G1);mNoise(t,0.06,0.18,"highpass",3500,1)}
+  if(st===4||st===12){mOsc(1170,t,0.09,"square",0.05,G1);mOsc(1637,t,0.07,"square",0.035,G1);mOsc(587,t,0.12,"triangle",0.06,G1);mNoise(t,0.06,0.24,"highpass",3500,1)}
   // 蒸汽洩壓（每小節最後）
   if(st===14&&bar%2===1)mNoise(t,s16*3.5,0.12,"bandpass",3800,0.7,7500,0.08);
   // 懷錶滴答（八分音符，滴／答）
@@ -223,30 +223,45 @@ function mStep(i,t,ten,s16){const st=i%16,bar=Math.floor(i/16)%4,root=MBASS[bar]
   if(ten>0.45&&st%2===1)mNoise(t,0.015,0.09,"highpass",5200,6);
   if(ten>0.6&&st%4===0)mOsc(mf(81),t,s16*1.6,"square",0.022,G1);
   // 蒸汽風琴：後兩小節出現（停電夜少一點）
-  if(bar>=2&&st%2===0&&!(dark&&bar===2)){const n=MLEAD[(bar-2)*16+st];if(n){const f=mf(n+(ten>0.6?12:0));mOsc(f,t,s16*1.7,"square",0.03,G1,null,-8);mOsc(f,t,s16*1.7,"triangle",0.045,G1,null,8);mOsc(f*2,t,s16*0.6,"sine",0.012,G1)}}}
-/* 白班配樂：G 大調輕快的工坊小調。撥弦低音「蹦—恰」、木魚、沙鈴、口哨旋律（擺盪八分音符）。
-   最後 8 秒加十六分沙鈴、稍微加快。 */
-const DBASS=[43,40,36,38],DMIN=[0,1,0,0];
-const DLEAD=[74,0,71,74,76,74,71,0, 71,0,67,71,74,71,67,0, 72,0,76,72,74,72,69,67, 69,0,66,69,74,0,0,0];
-function dStep(i,t,ten,s16){const st=i%16,bar=Math.floor(i/16)%4,loop=Math.floor(i/64),root=DBASS[bar],G1=MUS.g,sw=st%4===2?s16*0.32:0,tt=t+sw;
-  if(st===0||st===8)mOsc(mf(root-12+(st===8?7:0)),t,s16*2.6,"triangle",0.16,G1);
-  if(st===4||st===12){const tri=DMIN[bar]?[0,3,7]:[0,4,7];tri.forEach((k,j)=>mOsc(mf(root+12+k),t+j*0.012,s16*1.5,"triangle",0.028,G1))}
-  if(st===6||st===14)mOsc(st===6?880:660,tt,0.05,"sine",0.07,G1,420);
-  if(st%2===0)mNoise(st%4?tt:t,0.03,st%4?0.05:0.035,"highpass",6500,1);
-  if(ten>0.4&&st%2===1)mNoise(t,0.02,0.04,"highpass",7500,1);
-  if(st%2===0&&loop%3!==2){const n=DLEAD[bar*8+st/2];if(n){const f=mf(n-(loop%3===1?12:0));const o=ac.createOscillator(),g=ac.createGain(),l=ac.createOscillator(),lg=ac.createGain();
-    o.type=loop%3===1?"triangle":"sine";o.frequency.setValueAtTime(f*0.97,tt);o.frequency.exponentialRampToValueAtTime(f,tt+0.04);l.frequency.value=6;lg.gain.value=f*0.012;l.connect(lg);lg.connect(o.frequency);
-    g.gain.setValueAtTime(0.0001,tt);g.gain.exponentialRampToValueAtTime(0.06,tt+0.02);g.gain.exponentialRampToValueAtTime(0.0001,tt+s16*1.8);o.connect(g);g.connect(G1);o.start(tt);l.start(tt);o.stop(tt+s16*1.9);l.stop(tt+s16*1.9)}}}
+  if(bar>=2&&st%2===0&&!(dark&&bar===2)){const n=MLEAD[(bar-2)*16+st];if(n){const f=mf(n+(ten>0.6?12:0));mOsc(f,t,s16*1.7,"square",0.05,G1,null,-8);mOsc(f,t,s16*1.7,"triangle",0.06,G1,null,8);mOsc(f*2,t,s16*0.6,"sine",0.012,G1)}}}
+/* 白班配樂：G 大調、每分鐘 128 拍的晶片風工坊進行曲（和弦 G–D–Em–C）。
+   為了手機喇叭也聽得到：低音放在 98／196 Hz 八度跳、旋律用明亮的 25% 方波，
+   加上大鼓、小鼓、腳踏鈸、反拍和弦切音，每四小節尾巴敲一下鐵砧。
+   兩段旋律輪流（A／B），最後 8 秒加十六分琶音、再快一點。 */
+const DROOT=[43,38,40,36],DTRI=[[0,4,7],[0,4,7],[0,3,7],[0,4,7]];
+const DLEAD=[[79,0,79,81,83,0,79,0, 78,0,78,79,81,0,74,0, 76,0,76,78,79,0,83,0, 81,79,76,74,76,0,0,0],
+             [83,0,86,0,83,81,79,0, 81,0,78,0,74,0,78,81, 79,0,83,0,79,78,76,0, 72,74,76,79,78,0,74,0]];
+function mPulse(f,t,dur,vol,dest,det=0){if(!MUS.pw){const n=24,re=new Float32Array(n),im=new Float32Array(n);for(let k=1;k<n;k++)re[k]=2/(k*Math.PI)*Math.sin(k*Math.PI*0.25);MUS.pw=ac.createPeriodicWave(re,im)}
+  const o=ac.createOscillator(),g=ac.createGain(),l=ac.createOscillator(),lg=ac.createGain();o.setPeriodicWave(MUS.pw);o.frequency.setValueAtTime(f,t);o.detune.value=det;
+  l.frequency.value=5.5;lg.gain.setValueAtTime(0,t);lg.gain.linearRampToValueAtTime(f*0.008,t+dur*0.6);l.connect(lg);lg.connect(o.frequency);
+  g.gain.setValueAtTime(0.0001,t);g.gain.exponentialRampToValueAtTime(vol,t+0.008);g.gain.setValueAtTime(vol*0.8,t+dur*0.5);g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+  o.connect(g);g.connect(dest);o.start(t);l.start(t);o.stop(t+dur+0.02);l.stop(t+dur+0.02)}
+function dStep(i,t,ten,s16){const st=i%16,bar=Math.floor(i/16)%4,loop=Math.floor(i/64),root=DROOT[bar],tri=DTRI[bar],G1=MUS.g;
+  // 鼓：大鼓 1、3 拍（第 3 小節多一下），小鼓 2、4 拍，腳踏鈸八分
+  if(st===0||st===8||(bar===2&&st===10)){mOsc(150,t,0.12,"sine",0.3,G1,55);mNoise(t,0.015,0.18,"lowpass",3200)}
+  if(st===4||st===12){mNoise(t,0.12,0.4,"bandpass",1900,0.8);mOsc(220,t,0.07,"triangle",0.14,G1,150)}
+  if(st%2===0)mNoise(t,0.025,st%4?0.08:0.05,"highpass",7800,1);
+  // 低音：八度跳（98／196 Hz 一帶，手機喇叭聽得到）
+  if(st%2===0)mOsc(mf(root+(st%4?12:0)),t,s16*1.6,"square",0.05,G1);
+  // 反拍和弦切音
+  if(st%4===2)tri.forEach(k=>mOsc(mf(root+24+k),t,0.06,"square",0.018,G1));
+  // 主旋律（A、B 段輪流）
+  if(st%2===0){const n=DLEAD[loop%2][bar*8+st/2];if(n){let len=1;while(len<4&&(bar*8+st/2+len)%32&&!DLEAD[loop%2][bar*8+st/2+len]&&(st/2+len)<8)len++;
+    mPulse(mf(n),t,s16*2*len*0.92,0.1,G1);mPulse(mf(n),t,s16*2*len*0.92,0.035,G1,7)}}
+  // 每四小節尾巴：鐵砧「叮」
+  if(bar===3&&st===14){mOsc(2100,t,0.35,"sine",0.06,G1);mOsc(3170,t,0.25,"sine",0.03,G1)}
+  // 最後幾秒：十六分琶音
+  if(ten>0.35){const k=tri[st%3];mOsc(mf(root+36+k),t,s16*0.8,"square",0.014,G1)}}
 function musicTick(){if(!ac||!out)return;const t=ac.currentTime,night=mode==="night",day=mode==="day";
   const want=live()&&!paused&&(night||day)?mode:null;
-  if(!MUS.g){MUS.g=ac.createGain();MUS.g.gain.value=0.0001;MUS.g.connect(out);MUS.lp=ac.createBiquadFilter();MUS.lp.type="lowpass";MUS.lp.Q.value=6;MUS.lp.connect(MUS.g)}
-  if(want!==MUS.on){MUS.on=want;MUS.g.gain.cancelScheduledValues(t);MUS.g.gain.setTargetAtTime(want?(night?0.42:0.3):0.0001,t,want?0.4:0.12);if(want){MUS.next=t+0.08;MUS.step=0}}
+  if(!MUS.g){MUS.g=ac.createGain();MUS.g.gain.value=0.0001;MUS.cp=ac.createDynamicsCompressor();MUS.cp.threshold.value=-20;MUS.cp.ratio.value=4;MUS.cp.attack.value=0.004;MUS.cp.release.value=0.15;MUS.g.connect(MUS.cp);MUS.cp.connect(out);MUS.lp=ac.createBiquadFilter();MUS.lp.type="lowpass";MUS.lp.Q.value=6;MUS.lp.connect(MUS.g)}
+  if(want!==MUS.on){MUS.on=want;MUS.g.gain.cancelScheduledValues(t);MUS.g.gain.setTargetAtTime(want?(night?1.25:1.3):0.0001,t,want?0.4:0.12);if(want){MUS.next=t+0.08;MUS.step=0}}
   if(!want)return;
   if(MUS.next<t)MUS.next=t+0.02;
   if(night){const ten=clamp(1-(N.time-2)/12,0,1),bpm=112+ten*26+(G.mod==="rampage"?8:0),s16=60/bpm/4;
-    MUS.lp.frequency.setTargetAtTime(420+ten*1400,t,0.3);
+    MUS.lp.frequency.setTargetAtTime(900+ten*1600,t,0.3);
     while(MUS.next<t+0.16){mStep(MUS.step,MUS.next,ten,s16);MUS.next+=s16;MUS.step++}}
-  else{const ten=clamp(1-(D.t-1)/8,0,1),s16=60/(100+ten*12)/4;
+  else{const ten=clamp(1-(D.t-1)/8,0,1),s16=60/(128+ten*12)/4;
     while(MUS.next<t+0.16){dStep(MUS.step,MUS.next,ten,s16);MUS.next+=s16;MUS.step++}}}
 function soundLabel(){const b=$("audio");b.setAttribute("aria-pressed",String(soundOn));b.querySelector("span").textContent=soundOn?"音效開":"音效關";icon(b.querySelector("i"),soundOn?"sound":"mute")}
 $("audio").onclick=()=>{soundOn=!soundOn;save("nail-panic.sound",soundOn?"1":"0");soundLabel();unlock();if(!soundOn)buzz(false);tone(660,0.1)};soundLabel();
