@@ -23,3 +23,5 @@ dialog{border:1px solid #536076;border-top:4px solid var(--gold);background:#1a2
 .shiftLink{color:var(--aqua);font-size:14px}
 #sequence .ok{background:#2f6f55;color:#d8ffe9;border-color:#7fe0b0}#sequence .bad{background:#7a2a2e;color:#ffd6d0;border-color:#ff8a7a}
 #tapGate{position:absolute;inset:0;z-index:5;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;background:#0b1019d9;color:#ffe9a8;cursor:pointer}#tapGate b{font:900 26px system-ui;letter-spacing:2px;background:var(--gold);color:#252320;padding:12px 26px;border-radius:3px;box-shadow:0 4px #b7782c}#tapGate span{color:#c1c8d0;font-size:14px}
+
+body{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent}

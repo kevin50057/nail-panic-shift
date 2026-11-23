@@ -45,3 +45,16 @@ dialog{border:1px solid #536076;border-top:4px solid var(--gold);background:#1a2
 .primary:disabled{opacity:.6;cursor:progress;transform:none}
 
 .bossLink{pointer-events:auto;color:#ffdb80;background:#151d2a;border:1px solid #88713d;border-radius:3px;text-decoration:none;font-weight:750;padding:8px 15px;margin-top:9px}.bossLink:focus-visible{outline:3px solid #69e7de}
+
+/* 長按不會選字、不會跳出「拷貝／查詢」選單 */
+body{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent}
+/* 裝備欄 */
+#gear{display:flex;gap:3px;align-items:center}#gear:empty{display:none}
+#gear i{position:relative;width:22px;height:22px;padding:3px;background:#101724e6;border:1px solid #6a5b3a;border-radius:3px;display:inline-flex}
+#gear i svg{width:100%;height:100%}#gear i b{position:absolute;right:-3px;bottom:-4px;font:700 9px/1 ui-monospace,monospace;color:#ffe9a8;background:#3a2c14;border-radius:2px;padding:1px 2px}
+#gear i.new{animation:gearIn .9s ease-out}@keyframes gearIn{0%{transform:scale(2.2);border-color:#ffd166;box-shadow:0 0 14px #ffd166}100%{transform:none}}
+.perk .pi{width:30px;height:30px;flex:0 0 30px;display:inline-flex;padding:3px;background:#101724;border:1px solid #4a5468;border-radius:4px}.perk .pi svg{width:100%;height:100%}
+.perk.withIcon{display:grid;grid-template-columns:34px 1fr;column-gap:10px;align-items:center;text-align:left}.perk.withIcon .pi{grid-row:span 2}
+.liveRight{gap:6px}
+@media(max-width:700px){#gear{position:absolute;right:0;top:46px;gap:2px}#gear i{width:19px;height:19px;padding:2px}}
+#livebar>b{white-space:nowrap}

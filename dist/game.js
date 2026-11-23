@@ -189,6 +189,44 @@ function buzz(on,vol=0.05){if(!live()){if(!on&&buzzO){try{buzzO.stop();buzzO._l.
   if(on&&!buzzO){buzzO=ac.createOscillator();buzzO.type="sawtooth";buzzO.frequency.value=210;const l=ac.createOscillator(),lg=ac.createGain();l.frequency.value=13;lg.gain.value=28;l.connect(lg);lg.connect(buzzO.frequency);l.start();
     const fl=ac.createBiquadFilter();fl.type="bandpass";fl.frequency.value=900;buzzG=ac.createGain();buzzG.gain.value=0.0001;buzzO.connect(fl);fl.connect(buzzG);buzzG.connect(out);buzzO.start();buzzO._l=l}
   if(buzzG)buzzG.gain.setTargetAtTime(on?vol:0.0001,t,0.08);if(!on&&buzzO){const o=buzzO;buzzO=null;setTimeout(()=>{try{o.stop();o._l.stop()}catch{}},400)}}
+
+/* ================= 夜班配樂：蒸汽龐克＋緊張感（全部即時合成） =================
+   D 小調。活塞低音（鋸齒波過低通）、汽缸重拍、鐵砧敲擊、蒸汽洩壓、懷錶滴答，
+   加上一段蒸汽風琴（calliope）旋律。剩最後 12 秒會加速、濾波打開、加十六分音符警報。 */
+const MUS={on:false,next:0,step:0,g:null,lp:null};
+const mf=n=>440*Math.pow(2,(n-69)/12);
+// 每小節的低音根音（MIDI）：D D B♭ A
+const MBASS=[38,38,34,33],MCHUG=[1,0,1,1, 1,0,1,0, 1,0,1,1, 1,0,1,1],MOCT=[0,0,0,12, 0,0,0,0, 0,0,12,0, 0,0,0,7];
+// 蒸汽風琴旋律（八分音符，0＝休止），D 和聲小調
+const MLEAD=[69,0,74,0,77,76,74,73, 74,0,69,0,70,0,69,0, 69,0,74,0,77,79,81,0, 82,81,79,77,76,0,73,0];
+function mOsc(f,t,dur,type,vol,dest,to,det=0){const o=ac.createOscillator(),g=ac.createGain();o.type=type;o.frequency.setValueAtTime(f,t);o.detune.value=det;if(to)o.frequency.exponentialRampToValueAtTime(to,t+dur);
+  g.gain.setValueAtTime(0.0001,t);g.gain.exponentialRampToValueAtTime(vol,t+0.005);g.gain.exponentialRampToValueAtTime(0.0001,t+dur);o.connect(g);g.connect(dest);o.start(t);o.stop(t+dur+0.02)}
+function mNoise(t,dur,vol,type,f,q,to,att=0.003){const s=ac.createBufferSource(),fl=ac.createBiquadFilter(),g=ac.createGain();s.buffer=nb;fl.type=type;fl.frequency.setValueAtTime(f,t);if(to)fl.frequency.exponentialRampToValueAtTime(to,t+dur);fl.Q.value=q;
+  g.gain.setValueAtTime(0.0001,t);g.gain.exponentialRampToValueAtTime(vol,t+att);g.gain.exponentialRampToValueAtTime(0.0001,t+dur);s.connect(fl);fl.connect(g);g.connect(MUS.g);s.start(t,Math.random()*0.5);s.stop(t+dur+0.02)}
+function mStep(i,t,ten,s16){const st=i%16,bar=Math.floor(i/16)%4,root=MBASS[bar],G1=MUS.g,dark=G.mod==="blackout";
+  // 活塞低音
+  if(MCHUG[st])mOsc(mf(root+MOCT[st]),t,s16*0.9,"sawtooth",0.11,MUS.lp,null,st%2?6:-6);
+  // 汽缸重拍（第 1、9 格；緊張時多兩下）
+  if(st===0||st===8||(ten>0.3&&(st===6||st===14)))mOsc(130,t,0.2,"sine",0.5,G1,38);
+  // 鐵砧／齒輪敲擊（第 5、13 格）：兩個不和諧方波＋高頻噪音
+  if(st===4||st===12){mOsc(1170,t,0.07,"square",0.03,G1);mOsc(1637,t,0.05,"square",0.02,G1);mNoise(t,0.06,0.18,"highpass",3500,1)}
+  // 蒸汽洩壓（每小節最後）
+  if(st===14&&bar%2===1)mNoise(t,s16*3.5,0.12,"bandpass",3800,0.7,7500,0.08);
+  // 懷錶滴答（八分音符，滴／答）
+  if(st%2===0)mNoise(t,0.018,0.12,"highpass",st%4?2600:4200,4);
+  // 最後幾秒：十六分音符警報＋高音持續
+  if(ten>0.45&&st%2===1)mNoise(t,0.015,0.09,"highpass",5200,6);
+  if(ten>0.6&&st%4===0)mOsc(mf(81),t,s16*1.6,"square",0.022,G1);
+  // 蒸汽風琴：後兩小節出現（停電夜少一點）
+  if(bar>=2&&st%2===0&&!(dark&&bar===2)){const n=MLEAD[(bar-2)*16+st];if(n){const f=mf(n+(ten>0.6?12:0));mOsc(f,t,s16*1.7,"square",0.03,G1,null,-8);mOsc(f,t,s16*1.7,"triangle",0.045,G1,null,8);mOsc(f*2,t,s16*0.6,"sine",0.012,G1)}}}
+function musicTick(){if(!ac||!out)return;const want=live()&&mode==="night"&&!paused,t=ac.currentTime;
+  if(!MUS.g){MUS.g=ac.createGain();MUS.g.gain.value=0.0001;MUS.g.connect(out);MUS.lp=ac.createBiquadFilter();MUS.lp.type="lowpass";MUS.lp.Q.value=6;MUS.lp.connect(MUS.g)}
+  if(want!==MUS.on){MUS.on=want;MUS.g.gain.cancelScheduledValues(t);MUS.g.gain.setTargetAtTime(want?0.42:0.0001,t,want?0.4:0.12);if(want){MUS.next=t+0.08;MUS.step=0}}
+  if(!want)return;
+  const ten=clamp(1-(N.time-2)/12,0,1),bpm=112+ten*26+(G.mod==="rampage"?8:0),s16=60/bpm/4;
+  MUS.lp.frequency.setTargetAtTime(420+ten*1400,t,0.3);
+  if(MUS.next<t)MUS.next=t+0.02;
+  while(MUS.next<t+0.16){mStep(MUS.step,MUS.next,ten,s16);MUS.next+=s16;MUS.step++}}
 function soundLabel(){const b=$("audio");b.setAttribute("aria-pressed",String(soundOn));b.querySelector("span").textContent=soundOn?"音效開":"音效關";icon(b.querySelector("i"),soundOn?"sound":"mute")}
 $("audio").onclick=()=>{soundOn=!soundOn;save("nail-panic.sound",soundOn?"1":"0");soundLabel();unlock();if(!soundOn)buzz(false);tone(660,0.1)};soundLabel();
 
@@ -254,7 +292,7 @@ function dayImpact(){
     if(sp){say(sp==="sneeze"?"…你居然接得住？OK 繃給你。":"喔！反應不錯嘛！",1.6);if(sp==="sneeze"&&G.lives<G.maxLives){G.lives++;SFX.heal();livesUI()}}
     if(pf&&D.streak%5===0){if(G.lives<G.maxLives){G.lives++;SFX.heal();livesUI();say("手很穩嘛，OK 繃還你一片。",2)}else if(D.streak===5)say("喔～手很穩嘛！",1.4)}levelLine()}
   else if(j.type==="bent"){G.combo=0;D.streak=0;D.bent++;leaveNail("bent",D.hand.x-tx,D.hand.z-tz);SFX.bent();burst(hp,["hot"],5,1.6,0.04,0.3,1.5);G.shake=0.06;G.freeze=0.05;
-    pop("BENT","grey",up);say(pick(["嘖，歪了。晚上記得處理。","歪了！夜班自己收拾喔。","這根歪了，留給晚上的你。"]),1.6)}
+    pop("BENT","grey",up);say(pick(pk("lens")&&Math.random()<0.6?PERK_LINES.lens.bent:["嘖，歪了。晚上記得處理。","歪了！夜班自己收拾喔。","這根歪了，留給晚上的你。"]),1.6)}
   else if(j.type==="miss"){SFX.thud();dent(tx,tz);burst(new V3(tx,0.02,tz),["chip"],8,1.6,0.06,0.5,1.8);G.shake=0.1;G.freeze=0.05;
     if(isFly){G.flies++;pop("DODGE +"+gain(30),"mint",up);say(pick(["嘖，飛走了。","蒼蠅跑得真快…"]),1.2)}else{G.combo=0;D.streak=0;pop("MISS","grey",up);if(Math.random()<0.45)say(pick(["咦？釘子呢？","你跑去哪了？","慢吞吞的！"]),1.2)}}
   else if(D.shield>0){D.shield--;G.combo=0;SFX.clank();G.shake=0.15;G.freeze=0.06;burst(hp,["cold2"],8,2,0.05,0.35);pop("指套擋住！","mint zh",up);say("…好險有指套。",1.4)}
@@ -267,7 +305,7 @@ function newSwing(){const p=P();S.t=0;S.curve=false;S.sneeze=false;S.sn=0;S.wob=
   if(S.pendingDbl){S.pendingDbl=false;S.kind="dbl";S.aimD=0.38;S.windD=0.16;S.strD=p.strike;S.base.copy(chooseTarget(S.lock,0.45,0.9));say("再一下！",0.7)}
   else if(p.fly&&S.sinceFly>(G.mod==="flies"?0:2)&&Math.random()<p.fly){S.kind="fly";S.sinceFly=0;S.aimD=1.35;S.windD=Math.max(0.2,0.42-G.dayNails*0.004);S.strD=0.1;S.aim.set(D.hand.x,0,D.hand.z);
     F.on=true;F.ph="in";F.t=0;F.from.set(rand(-3,3),2.4,-2.8);F.pos.copy(F.from);fly.visible=true;buzz(true,0.05);say("有蒼蠅！別動喔～",1.5)}
-  else{S.kind="n";S.sinceFly++;S.aimD=p.aim;S.windD=p.wind;S.strD=p.strike;S.wob=p.wob;S.base.copy(chooseTarget(new V3(D.hand.x,0,D.hand.z),p.dist*0.5,p.dist));S.sneeze=Math.random()<p.sneeze;if(!S.sneeze)S.curve=Math.random()<p.curve}
+  else{if(sayT<=0&&Math.random()<0.07)perkChat();S.kind="n";S.sinceFly++;S.aimD=p.aim;S.windD=p.wind;S.strD=p.strike;S.wob=p.wob;S.base.copy(chooseTarget(new V3(D.hand.x,0,D.hand.z),p.dist*0.5,p.dist));S.sneeze=Math.random()<p.sneeze;if(!S.sneeze)S.curve=Math.random()<p.curve}
   S.st="aim"}
 function lockNow(){if(S.kind==="fly"){const ld=D.vel.clone().multiplyScalar(P().lead);if(ld.length()>0.9)ld.setLength(0.9);const fl=flyLand();S.lock.set(fl.x+ld.x,0,fl.z+ld.z);inCircle(S.lock,TGT_R);F.ph="out";F.t=0;F.vel.set(rand(-1.5,1.5),2.6,rand(-1.6,-0.4));buzz(true,0.08)}
   else{S.lock.set(S.aim.x,0,S.aim.z);S.to.copy(S.lock);
@@ -306,7 +344,7 @@ function dayStep(dt){
 
 /* ================= handover: 白班 → 夜班 ================= */
 function beginHandover(){mode="handover";X.t=0;ring.visible=ghost.visible=false;S.st="idle";if(F.on){F.on=false;fly.visible=false;buzz(false)}
-  say("收工！剩下的交給你了。",2.2);SFX.bell();envTarget=1;screenEl.classList.add("night");screenEl.classList.toggle("blackout",G.mod==="blackout");setWave();$("sys").textContent="交班中";announce("交班：師傅下班，電磁怪醒了")}
+  {const np=["heavy","lure","coffee","bonus"].filter(k=>pk(k));say(np.length?"收工！"+PERK_LINES[pick(np)].night:"收工！剩下的交給你了。",2.4)}SFX.bell();envTarget=1;screenEl.classList.add("night");screenEl.classList.toggle("blackout",G.mod==="blackout");setWave();$("sys").textContent="交班中";announce("交班：師傅下班，電磁怪醒了")}
 function handoverStep(dt){X.t+=dt;const t=X.t;
   if(t>0.7&&D.nail&&!X.dropped){X.dropped=D.nail;D.nail=null;D.alive=false;X.dropped.userData.v=new V3(0.3,1.2,0.4)}
   if(X.dropped){const n=X.dropped,v=n.userData.v;v.y-=9*dt;n.position.addScaledVector(v,dt);n.rotation.z+=dt*6;if(n.position.y<-0.06){n.position.y=-0.06;v.set(0,0,0)}}
@@ -375,17 +413,18 @@ function nightClear(){if(mode!=="night")return;mode="dayend";const bonus=gain(Ma
 /* ================= flow ================= */
 function clearBoard(){for(const p of D.placed)scene.remove(p.mesh);D.placed.length=0;for(const n of N.nails){scene.remove(n.mesh);if(n.marker)scene.remove(n.marker)}N.nails.length=0;
   dents.forEach(d=>scene.remove(d));dents.length=0;if(X.dropped){scene.remove(X.dropped);X.dropped=null}if(D.nail){scene.remove(D.nail);D.nail=null}}
-function startRun(){closeDialog();unlock();Object.assign(G,{day:1,score:0,lives:DIFFS[diff].lives,maxLives:DIFFS[diff].lives,perks:{},mod:null,nextMod:null,sw:{index:1,thumb:1},dayNails:0,perfects:0,baits:0,dodges:0,flies:0,combo:0,bestCombo:0,nightNails:0,shake:0,freeze:0});
+function startRun(){closeDialog();unlock();Object.assign(G,{day:1,score:0,lives:DIFFS[diff].lives,maxLives:DIFFS[diff].lives,perks:{},mod:null,nextMod:null,sw:{index:1,thumb:1},dayNails:0,perfects:0,baits:0,dodges:0,flies:0,combo:0,bestCombo:0,nightNails:0,shake:0,freeze:0});G.lastPerk=null;perkLooks();
   buildFingers();livesUI();lineAt=-1;
   $("home").hidden=true;canvas.hidden=false;$("livebar").hidden=false;$("hint").hidden=false;document.body.classList.add("playing");resize();
   X.handOut=1;X.masterOut=1;X.hamIn=0;master.position.x=6.5;M.my=9;startDay(true);canvas.focus({preventScroll:true});resume()}
 function startDay(first){mode="day";G.mod=first?null:G.nextMod;clearBoard();envTarget=0;screenEl.classList.remove("night","blackout");M.phase="off";magRing.visible=ret.visible=false;
   Object.assign(D,{t:G.mod==="rush"?22:DAY_T,shield:pk("thimble"),hurtToday:0,today:0,streak:0,ending:false,hurt:0,react:0,bent:0,good:0,perfect:0,respawn:0});D.hand.set(0.4,0,1);D.prev.copy(D.hand);D.vel.set(0,0,0);
   spawnNail();S.st="gap";S.t=first?-1.0:-1.6;S.gapD=0.3;S.pendingDbl=false;S.sinceFly=0;S.hover.set(0.6,HEADY,-0.6);
-  setWave();$("sys").textContent="白班中"+sysMod();say(first?"新來的？釘子扶好，我來敲。":pick(["早！今天也麻煩你了。","昨晚辛苦啦，今天繼續！","手還好吧？來，扶好。"]),2.2);
+  setWave();$("sys").textContent="白班中"+sysMod();const lp=!first&&G.lastPerk?PERK_LINES[G.lastPerk]:null;G.lastPerk=null;
+  say(first?"新來的？釘子扶好，我來敲。":lp?(lp===PERK_LINES.lens&&pk("lens")>1?lp.two:lp.pick):pick(["早！今天也麻煩你了。","昨晚辛苦啦，今天繼續！","手還好吧？來，扶好。"]),2.6);
   if(G.mod)tip(`今日工單：${MODS[G.mod].name}｜${modDesc(G.mod)}`,3.6,true);else tip(first?"拖曳畫面任何地方移動手，把釘子送到圓圈中心":"白班開始！敲歪的釘子晚上要自己處理",2.6);if(!first)SFX.bell();announce(`第 ${G.day} 天白班開始`)}
 function row(a,b){return"<div><span>"+a+"</span><b>"+b+"</b></div>"}
-function applyPerk(k){G.perks[k]=pk(k)+1;if(k==="glove"){if(G.lives>=G.maxLives)G.maxLives++;G.lives++}if(k==="ice")G.sw={index:1,thumb:1};buildFingers();livesUI()}
+function applyPerk(k){G.perks[k]=pk(k)+1;G.lastPerk=k;if(k==="glove"){if(G.lives>=G.maxLives)G.maxLives++;G.lives++}if(k==="ice")G.sw={index:1,thumb:1};buildFingers();livesUI();perkLooks(k)}
 function dayEndDialog(bonus){
   const g=D.hurtToday===0&&D.bent===0&&N.time>=12?"S":D.hurtToday===0&&D.bent<=1?"A":D.hurtToday<=1&&D.bent<=3?"B":"C",gb=g==="S"?gain(400):g==="A"?gain(150):0;
   if(G.score>best){best=G.score;save("nail-shift.best",String(best))}renderUI();
@@ -395,7 +434,7 @@ function dayEndDialog(bonus){
     row("白班扶好／敲歪",`${D.today}／${D.bent} 根`)+row("夜班敲入",N.cleared+" 根")+row("提早收工＋評等獎勵","+"+(bonus+gb))+row("OK 繃",G.lives+" / "+G.maxLives)+'</div>'+
     '<p class="nextmod">'+(G.nextMod?"<strong>明日工單："+MODS[G.nextMod].name+"</strong><br>"+modDesc(G.nextMod):"明日工單：普通的一天")+'</p><p>挑一樣帶去明天：</p><div class="perks" id="perks"></div>',
     [["回主畫面",goHome,false]],"result");
-  for(const k of pool){const b=document.createElement("button");b.className="perk";b.dataset.perk=k;b.innerHTML="<b>"+PERKS[k].name+(pk(k)?"（已有 "+pk(k)+"）":"")+"</b><span>"+PERKS[k].desc+"</span>";
+  for(const k of pool){const b=document.createElement("button");b.className="perk withIcon";b.dataset.perk=k;b.innerHTML='<i class="pi">'+PixelArt.icon(PERK_ICON[k])+"</i><b>"+PERKS[k].name+(pk(k)?"（已有 "+pk(k)+"）":"")+"</b><span>"+PERKS[k].desc+"</span>";
     b.onclick=()=>{applyPerk(k);closeDialog();G.day++;startDay(false);resume()};$("perks").append(b)}
   $("perks").querySelector("button")?.focus({preventScroll:true})}
 function gameOver(why){if(mode==="over")return;const prev=mode;mode="over";S.st=S.st==="idle"?"idle":"rec";S.t=0;M.phase="off";magRing.visible=false;if(F.on){F.on=false;fly.visible=false;buzz(false)}
@@ -462,7 +501,7 @@ function step(dt){
     else if(F.ph==="land")F.pos.copy(flyLand());else{F.vel.y+=1.5*dt;F.pos.addScaledVector(F.vel,dt);if(F.t>1.3){F.on=false;fly.visible=false;buzz(false)}}fly.position.copy(F.pos);fly.rotation.y=Math.sin(F.t*3)*0.6}
   for(let i=parts.length-1;i>=0;i--){const m=parts[i],u=m.userData;u.life-=dt;u.v.y-=9*dt;m.position.addScaledVector(u.v,dt);if(m.position.y<0.01){m.position.y=0.01;u.v.multiplyScalar(0.3)}m.rotation.x+=dt*9;m.scale.setScalar(Math.max(0.001,m.scale.x*(u.life>0?Math.pow(Math.max(0.01,u.life/u.max),dt*3):0)));if(u.life<=0){scene.remove(m);parts.splice(i,1)}}
   tipTime=Math.max(0,tipTime-dt)}
-function visuals(rdt){const now=performance.now()/1000;
+function visuals(rdt){const now=performance.now()/1000;perkAnim(now);musicTick();
   env=lerp(env,envTarget,damp(1.6,rdt));dark=lerp(dark,mode==="night"&&G.mod==="blackout"?1:0,damp(1.5,rdt));applyEnv();
   D.hurt=Math.max(0,D.hurt-rdt);D.react=Math.max(0,D.react-rdt);
   // apprentice hand (slides out at night)
@@ -516,6 +555,62 @@ function frame(now){if(mode==="home")return;const rdt=Math.min(0.05,(now-last)/1
   renderer.render(scene,camera);if(!paused)raf=requestAnimationFrame(frame)}
 function resume(){cancelAnimationFrame(raf);last=performance.now();raf=requestAnimationFrame(frame)}
 
+
+/* ================= 裝備：選了就看得到、師傅也會講 ================= */
+const PERK_ICON={glove:"glove",thimble:"thimble",lens:"glasses",ice:"ice",heavy:"heavy",coffee:"coffee",lure:"lure",bonus:"bonus"};
+const PERK_LINES={
+  lens:{pick:"新眼鏡！嘿…原來木頭紋路長這樣。",two:"雙層鏡片！連蒼蠅腿毛都看得一清二楚。",chat:["這副眼鏡真清楚，連你的指紋都看得到。","戴上新眼鏡，瞄得準多了吧？","眼鏡別亂摸，會留指紋。"],bent:["戴了新眼鏡還歪…是你手抖吧？","奇怪，眼鏡明明很清楚啊…"]},
+  thimble:{pick:"戴鐵指套啦？好，那我就放心敲了…開玩笑的。",chat:["指套戴緊，敲到會「鏗」很大聲喔。"]},
+  ice:{pick:"手消腫啦？冰敷袋先綁著，別滴到木頭上。",chat:["冰敷袋還冰嗎？"]},
+  glove:{pick:"急救包放旁邊，痛了自己拿。",chat:["急救包裡的 OK 繃省著點用。"]},
+  heavy:{pick:"加重槌頭幫你換好了，晚上手腕撐住。",chat:["晚上那支槌子很重，現在先熱身。"],night:"加重槌頭給你，一槌當兩槌用！"},
+  coffee:{pick:"喝了濃咖啡？眼睛瞪那麼大幹嘛。",chat:["咖啡別放太近，會打翻。"],night:"咖啡留給你，夜班多撐一下。"},
+  lure:{pick:"誘餌我晚點掛到電磁怪身上。",chat:["那個誘餌一直在發光，看得我眼睛好花。"],night:"誘餌掛好了，引牠過來一次砸一排！"},
+  bonus:{pick:"加班費談好了！今天好好幹。",chat:["領了加班費，可不能偷懶喔。"],night:"記得喔，加班費是算件的。"}};
+const GEAR={};
+const isIn=(o,g)=>{for(let p=o;p;p=p.parent)if(p===g)return true;return false};
+function looks(){if(GEAR.ready)return;GEAR.ready=true;
+  // 師傅的新眼鏡：金框、大鏡片、反光；第二副再加一支放大鏡片
+  const goldF=phong(0xffc94a,120,0xffffff),lensB=basic(0xbfe8ff,{transparent:true,opacity:0.5}),white=basic(0xffffff);
+  const g=new THREE.Group();
+  [0.24,-0.24].forEach(x=>{add(g,new THREE.TorusGeometry(0.205,0.045,6,20),goldF,[x,0.02,0.72]);add(g,new THREE.CircleGeometry(0.19,18),lensB,[x,0.02,0.726]);add(g,new THREE.PlaneGeometry(0.05,0.15),white,[x-0.07,0.08,0.732],null,[0,0,-0.6])});
+  add(g,new THREE.BoxGeometry(0.1,0.04,0.04),goldF,[0,0.06,0.73]);[1,-1].forEach(k=>seg(g,new V3(0.44*k,0.04,0.66),new V3(0.72*k,0.06,0.1),0.022,goldF));
+  const loupe=new THREE.Group();add(loupe,new THREE.CylinderGeometry(0.1,0.13,0.22,12),phong(0x2a2a30,60),[0,0,0],null,[Math.PI/2,0,0]);add(loupe,new THREE.CircleGeometry(0.1,12),basic(0x9fe8ff),[0,0,0.112]);
+  loupe.position.set(-0.24,0.02,0.86);g.add(loupe);headG.add(g);GEAR.glasses=g;GEAR.loupe=loupe;
+  // 鐵指套：套在食指指尖
+  const steelT=phong(0xb9c2cc,110,0xffffff),tg=new THREE.Group(),dir=IDX[2].clone().sub(IDX[1]).normalize();
+  const a=IDX[1].clone().lerp(IDX[2],0.45),b=IDX[2].clone().addScaledVector(dir,0.04);seg(tg,a,b,0.092,steelT);add(tg,sph,steelT,b.toArray(),0.092);
+  add(tg,new THREE.TorusGeometry(0.095,0.018,5,12),phong(0x7d8792,60),a.toArray(),null,[0,Math.atan2(dir.x,dir.z),0]);hand.add(tg);GEAR.thimble=tg;
+  // 冰敷袋：綁在前臂
+  const ice=new THREE.Group();add(ice,sph,phong(0x8fd4ff,90,0xffffff),[-1.42,0.3,0.56],[0.32,0.14,0.25]);add(ice,new THREE.TorusGeometry(0.27,0.03,5,14),mat(0xffffff),[-1.42,0.3,0.56],null,[0.4,-0.6,0]);hand.add(ice);GEAR.ice=ice;
+  // 急救包（右後）、濃咖啡（左後）、加班費信封＋硬幣（左側）：放在木樁邊緣
+  const kit=new THREE.Group();add(kit,new THREE.BoxGeometry(0.56,0.34,0.4),mat(0xd94545),[0,0.17,0]);add(kit,new THREE.BoxGeometry(0.26,0.07,0.02),mat(0xffffff),[0,0.18,0.205]);add(kit,new THREE.BoxGeometry(0.07,0.24,0.02),mat(0xffffff),[0,0.18,0.205]);
+  add(kit,new THREE.BoxGeometry(0.22,0.05,0.06),mat(0x6e2222),[0,0.37,0]);kit.position.set(1.62,0,-1.55);kit.rotation.y=-0.5;scene.add(kit);GEAR.kit=kit;
+  const mug=new THREE.Group();add(mug,new THREE.CylinderGeometry(0.17,0.15,0.32,14),phong(0xeee2cf,50),[0,0.16,0]);add(mug,new THREE.CircleGeometry(0.15,14),basic(0x3b2416),[0,0.3,0],null,[-Math.PI/2,0,0]);
+  add(mug,new THREE.TorusGeometry(0.09,0.03,5,10),phong(0xeee2cf,50),[0.19,0.17,0]);GEAR.steam=[0,1,2].map(i=>add(mug,sph,basic(0xffffff,{transparent:true,opacity:0.5}),[0,0.4,0],0.05));
+  mug.position.set(-1.62,0,-1.55);scene.add(mug);GEAR.mug=mug;
+  const cash=new THREE.Group();add(cash,new THREE.BoxGeometry(0.5,0.03,0.32),mat(0xf3ead6),[0,0.015,0]);add(cash,new THREE.CylinderGeometry(0.06,0.06,0.02,10),mat(0xc0392b),[0,0.035,0.05]);
+  for(let i=0;i<4;i++)add(cash,new THREE.CylinderGeometry(0.1,0.1,0.035,12),phong(0xffcf4a,100,0xffffff),[0.42,0.02+i*0.036,0.05]);cash.position.set(-2.02,0,-0.55);cash.rotation.y=0.35;scene.add(cash);GEAR.cash=cash;
+  // 強力誘餌：電磁怪下面吊一顆發光的餌
+  const bait=new THREE.Group();seg(bait,new V3(0,-0.2,0),new V3(0,-0.52,0),0.015,mat(0x8a93a0));add(bait,sph,basic(0xffd24a),[0,-0.6,0],0.11);
+  GEAR.baitGlow=add(bait,sph,basic(0xffe58a,{transparent:true,opacity:0.3,depthWrite:false}),[0,-0.6,0],0.22);GEAR.bait=bait;
+  // 師傅的新眼鏡 → 瞄準圈多了刻度（看得更清楚）
+  const ticks=new THREE.Group();for(let i=0;i<4;i++){const ang=i*Math.PI/2,m=flat(new THREE.PlaneGeometry(0.05,0.16),0x9ff6ff,0.95);m.position.set(Math.cos(ang)*(R+0.12),0,Math.sin(ang)*(R+0.12));m.rotation.z=-ang+Math.PI/2;ticks.add(m)}
+  ring.add(ticks);ghost.add(ticks.clone());GEAR.ticks=[ticks,ghost.children[ghost.children.length-1]]}
+function perkLooks(newKey){looks();const L=pk("lens");
+  GEAR.glasses.visible=L>0;GEAR.loupe.visible=L>1;
+  (GEAR.head||headG).traverse(o=>{if(o.isMesh&&!isIn(o,GEAR.glasses)&&(o.material===glassM||o.material===lensM||o.material.name==="Glass"||o.material.name==="Lens"))o.visible=!L});
+  GEAR.thimble.visible=pk("thimble")>0;GEAR.ice.visible=pk("ice")>0;GEAR.kit.visible=pk("glove")>0;GEAR.mug.visible=pk("coffee")>0;GEAR.cash.visible=pk("bonus")>0;
+  if(GEAR.bait.parent!==magnet)magnet.add(GEAR.bait);GEAR.bait.visible=pk("lure")>0;GEAR.bait.scale.setScalar(1+0.3*Math.max(0,pk("lure")-1));
+  GEAR.ticks.forEach(t=>t.visible=L>0);
+  const hk=1+0.14*Math.min(3,pk("heavy"));hamP.scale.setScalar(PS*hk);FP.copy(F0(YP).multiplyScalar(PS*hk));
+  $("gear").innerHTML=Object.keys(G.perks).filter(k=>pk(k)>0).map(k=>'<i title="'+PERKS[k].name+'" class="'+(k===newKey?"new":"")+'">'+PixelArt.icon(PERK_ICON[k])+(pk(k)>1?"<b>"+pk(k)+"</b>":"")+"</i>").join("")}
+function perkAnim(now){if(!GEAR.ready)return;
+  if(GEAR.mug.visible)GEAR.steam.forEach((m,i)=>{const u=(now*0.6+i/3)%1;m.position.set(Math.sin(now*2+i)*0.04,0.36+u*0.5,0);m.scale.setScalar(0.04+u*0.07);m.material.opacity=0.5*(1-u)});
+  if(GEAR.bait.visible){GEAR.baitGlow.scale.setScalar(0.2+Math.sin(now*6)*0.04)}
+  if(GEAR.thimble.visible){const sw=G.sw.index;GEAR.thimble.scale.setScalar(1);GEAR.thimble.children.forEach(c=>c.material.color&&c.material.color.setHex(D.shield>0||mode!=="day"?0xb9c2cc:0x7a7f86))}}
+function perkChat(){const ks=Object.keys(G.perks).filter(k=>pk(k)>0);if(!ks.length)return;const k=pick(ks);say(pick(PERK_LINES[k].chat),1.9)}
+
 /* ================= Blender models (models.glb) ================= */
 const glbMats={};
 function glbMat(m){const nm=m.name;if(glbMats[nm])return glbMats[nm];const c=m.color?m.color.getHex():0xffffff;let n;
@@ -544,7 +639,7 @@ function useModels(root){
   const hg=n=>hd.getObjectByName(n);eyes=[hg("EyeA"),hg("EyeB")];brows=[hg("BrowA"),hg("BrowB")];mouth=hg("Mouth");sweat=hg("Sweat");sweat.visible=false;
   EXP.eye=1;EXP.brow=brows[0].position.y;EXP.mouth=1;mouth.scale.y=0.02/0.02;
   hideKids(hand);if(fingers){hand.remove(fingers);fingers=null}const hn=take("Hand");hn.position.set(0,0,0);hand.add(hn);
-  glbFingers=[["index",hn.getObjectByName("Index")],["thumb",hn.getObjectByName("Thumb")]];buildFingers()}
+  glbFingers=[["index",hn.getObjectByName("Index")],["thumb",hn.getObjectByName("Thumb")]];buildFingers();GEAR.head=hd;perkLooks()}
 let modelsReady=!THREE.GLTFLoader;
 function modelsDone(){if(modelsReady)return;modelsReady=true;const b=$("start");b.disabled=false;b.lastChild.textContent="開始上班"}
 if(THREE.GLTFLoader){const b=$("start");b.disabled=true;b.lastChild.textContent="載入模型中…";
@@ -553,6 +648,6 @@ if(THREE.GLTFLoader){const b=$("start");b.disabled=true;b.lastChild.textContent=
 function diffUI(){$("diff").replaceChildren(...DIFFS.map((d,i)=>{const b=document.createElement("button");b.textContent=d.name;b.setAttribute("aria-pressed",String(i===diff));b.onclick=()=>{diff=i;save("nail-shift.diff",String(i));diffUI()};return b}));
   $("diffNote").textContent=`OK 繃 ${DIFFS[diff].lives} 片・夜班 ${NIGHT_T+DIFFS[diff].night} 秒・得分 ×${DIFFS[diff].mult}`;if(mode==="home")$("count").textContent=String(NIGHT_T+DIFFS[diff].night)}
 diffUI();$("record").textContent=String(best).padStart(4,"0");resize();
-if(location.hash==="#debug")window.__shift={scene,G,D,S,N,M,X,get mode(){return mode},startRun,gameOver};
+if(location.hash==="#debug")window.__shift={scene,G,D,S,N,M,X,get mode(){return mode},startRun,gameOver,applyPerk,MUS,nightClear};
 })();
 
