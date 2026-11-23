@@ -132,7 +132,7 @@ function flat(geo,c,op){const m=new THREE.Mesh(geo,basic(c,{transparent:true,opa
 function makeRing(op){const g=new THREE.Group(),parts=[flat(new THREE.RingGeometry(R,R+0.03,32),0x1a0e06,op*0.55),flat(new THREE.RingGeometry(R-0.075,R-0.045,32),0x1a0e06,op*0.55),flat(new THREE.RingGeometry(R-0.045,R,32),0xfff4dc,op),flat(new THREE.CircleGeometry(0.03,8),0xfff4dc,op),flat(new THREE.CircleGeometry(R-0.045,28),0xfff4dc,op*0.16)];
   parts.forEach(p=>g.add(p));g.userData.tint=parts.slice(2);g.position.y=0.02;g.visible=false;scene.add(g);return g}
 const tint=(g,c)=>g.userData.tint.forEach(p=>p.material.color.setHex(c));
-const ring=makeRing(0.95),ghost=makeRing(0.4);
+const ring=makeRing(0.95),ghost=makeRing(0.95);
 const ret=new THREE.Group();ret.visible=false;scene.add(ret);
 const retParts=[flat(new THREE.RingGeometry(0.2,0.25,28),0x233a3d,0.9),flat(new THREE.RingGeometry(0.17,0.21,28),0x69e7de,1)];
 [[0.34,0,0],[-0.34,0,0],[0,0,0.3],[0,0,-0.3]].forEach(([x,,z])=>{const t=flat(new THREE.PlaneGeometry(z?0.035:0.14,z?0.12:0.035),0x69e7de,1);t.position.set(x,0,z);retParts.push(t)});
@@ -166,6 +166,7 @@ function primeCtx(c){try{const b=c.createBuffer(1,1,22050),s=c.createBufferSourc
 function unlock(){if(!soundOn)return;unmuteIOS();try{if(navigator.audioSession)navigator.audioSession.type="playback"}catch{}try{if(!ac){ac=new(window.AudioContext||window.webkitAudioContext)();out=ac.createGain();out.gain.value=0.55;out.connect(ac.destination);
   nb=ac.createBuffer(1,ac.sampleRate,ac.sampleRate);const d=nb.getChannelData(0);for(let i=0;i<d.length;i++)d[i]=Math.random()*2-1}primeCtx(ac);if(ac.state!=="running")ac.resume().catch(()=>{})}catch{ac=null}}
 const live=()=>soundOn&&ac&&ac.state==="running";
+for(const ev of ["pointerdown","touchend","click","keydown"])document.addEventListener(ev,()=>unlock(),{capture:true});
 function tone(f,dur,type="square",vol=0.035,to=null,delay=0){if(!live())return;const t=ac.currentTime+delay,o=ac.createOscillator(),g=ac.createGain();o.type=type;o.frequency.setValueAtTime(f,t);if(to)o.frequency.exponentialRampToValueAtTime(Math.max(24,to),t+dur);
   g.gain.setValueAtTime(0.0001,t);g.gain.exponentialRampToValueAtTime(vol,t+0.006);g.gain.exponentialRampToValueAtTime(0.0001,t+dur);o.connect(g);g.connect(out);o.start(t);o.stop(t+dur+0.03)}
 function noise(dur,vol,type="lowpass",f=800,q=1,to=null,delay=0){if(!live())return;const t=ac.currentTime+delay,s=ac.createBufferSource(),fl=ac.createBiquadFilter(),g=ac.createGain();s.buffer=nb;fl.type=type;fl.frequency.setValueAtTime(f,t);if(to)fl.frequency.exponentialRampToValueAtTime(to,t+dur);fl.Q.value=q;
@@ -227,7 +228,7 @@ function renderUI(){
   display($("count"),String(night?N.nails.filter(n=>n.hp>0).length:ho?D.good+D.bent+nightPlan().fresh+nightPlan().heavy:D.today).padStart(2,"0"));display($("score"),String(G.score).padStart(4,"0"));display($("record"),String(Math.max(best,G.score)).padStart(4,"0"));
   let msg=tipTime>0?tipText:"",hot=tipHot&&tipTime>0;
   if(night&&N.stun<=0){if(M.phase==="track"){msg="黃圈追蹤中：把它帶到歪釘上";hot=true}else if(M.phase==="lock"||M.phase==="slam"){msg="紅圈鎖定！快閃開！";hot=true}}
-  if(mode==="day"&&!msg){if(S.st==="wind"||S.st==="strike"){msg=S.kind==="fly"?"現在閃！":"紅圈＝要落鎚了！";hot=true}else if(S.st==="aim"&&S.kind==="fly"){msg="蒼蠅！等圓圈變紅再閃";hot=true}}
+  if(mode==="day"&&!msg){if(S.st==="wind"||S.st==="strike"){msg=S.kind==="fly"?"現在閃！":ghost.visible?"黃圈才是落點！追過去接，或閃開":"紅圈＝要落鎚了！";hot=true}else if(S.st==="aim"&&S.kind==="fly"){msg="蒼蠅！等圓圈變紅再閃";hot=true}}
   if(!msg)msg=night?"拖曳移槌，放開敲擊":mode==="day"?"把釘子送到圓圈正中央・小心手指":"交班中…";
   display($("hint"),msg);$("hint").classList.toggle("hot",hot);document.body.classList.toggle("danger",night&&N.time<9)}
 
@@ -246,9 +247,11 @@ function combo(){G.combo++;G.bestCombo=Math.max(G.bestCombo,G.combo);return Math
 function dayImpact(){
   const tx=S.cur.x,tz=S.cur.z,j=judge(tx,tz),isFly=S.kind==="fly",hp=new V3(tx,S.cur.y,tz),p=P(),up=new V3(tx,1.3,tz);
   S.pendingDbl=!isFly&&S.kind!=="dbl"&&Math.random()<p.dbl;
-  if(j.type==="perfect"||j.type==="good"){const pf=j.type==="perfect",pts=gain(((pf?150:80)+combo())*(G.mod==="gold"?2:1));G.dayNails++;D.today++;pf?(G.perfects++,D.perfect++,D.streak++):(D.good++,D.streak=0);
+  const sp=!isFly&&S.curve?(S.sn===3?"sneeze":"slip"):null;
+  if(j.type==="perfect"||j.type==="good"){const pf=j.type==="perfect",pts=gain(((pf?150:80)+combo())*(G.mod==="gold"?2:1)*(sp?2:1));G.dayNails++;D.today++;pf?(G.perfects++,D.perfect++,D.streak++):(D.good++,D.streak=0);
     leaveNail(j.type);pf?SFX.perfect():SFX.good();burst(hp,["hot","hot2"],pf?16:9,pf?3.2:2.2,0.05,0.45,2.6);G.freeze=pf?0.09:0.06;G.shake=pf?0.12:0.08;
-    pop((isFly?"LUCKY ":pf?"PERFECT ":"HIT ")+"+"+pts,pf?"gold":"hit",up);
+    pop(sp?(sp==="sneeze"?"接住噴嚏！+":"接住手滑！+")+pts:(isFly?"LUCKY ":pf?"PERFECT ":"HIT ")+"+"+pts,sp?"gold zh":pf?"gold":"hit",up);
+    if(sp){say(sp==="sneeze"?"…你居然接得住？OK 繃給你。":"喔！反應不錯嘛！",1.6);if(sp==="sneeze"&&G.lives<G.maxLives){G.lives++;SFX.heal();livesUI()}}
     if(pf&&D.streak%5===0){if(G.lives<G.maxLives){G.lives++;SFX.heal();livesUI();say("手很穩嘛，OK 繃還你一片。",2)}else if(D.streak===5)say("喔～手很穩嘛！",1.4)}levelLine()}
   else if(j.type==="bent"){G.combo=0;D.streak=0;D.bent++;leaveNail("bent",D.hand.x-tx,D.hand.z-tz);SFX.bent();burst(hp,["hot"],5,1.6,0.04,0.3,1.5);G.shake=0.06;G.freeze=0.05;
     pop("BENT","grey",up);say(pick(["嘖，歪了。晚上記得處理。","歪了！夜班自己收拾喔。","這根歪了，留給晚上的你。"]),1.6)}
@@ -267,7 +270,13 @@ function newSwing(){const p=P();S.t=0;S.curve=false;S.sneeze=false;S.sn=0;S.wob=
   else{S.kind="n";S.sinceFly++;S.aimD=p.aim;S.windD=p.wind;S.strD=p.strike;S.wob=p.wob;S.base.copy(chooseTarget(new V3(D.hand.x,0,D.hand.z),p.dist*0.5,p.dist));S.sneeze=Math.random()<p.sneeze;if(!S.sneeze)S.curve=Math.random()<p.curve}
   S.st="aim"}
 function lockNow(){if(S.kind==="fly"){const ld=D.vel.clone().multiplyScalar(P().lead);if(ld.length()>0.9)ld.setLength(0.9);const fl=flyLand();S.lock.set(fl.x+ld.x,0,fl.z+ld.z);inCircle(S.lock,TGT_R);F.ph="out";F.t=0;F.vel.set(rand(-1.5,1.5),2.6,rand(-1.6,-0.4));buzz(true,0.08)}
-  else S.lock.set(S.aim.x,0,S.aim.z);S.st="wind";S.t=0;SFX.whoosh(S.windD+0.1,250,1200)}
+  else{S.lock.set(S.aim.x,0,S.aim.z);S.to.copy(S.lock);
+    if(S.sneeze)S.to.copy(chooseTarget(S.lock,0.6,1.1));
+    else if(S.curve){S.to.copy(chooseTarget(S.lock,0.45,0.8));say("唔…手好滑…",0.9);firstTip("slip")}}
+  S.st="wind";S.t=0;SFX.whoosh(S.windD+0.1,250,1200)}
+// 手滑／噴嚏：真正落點提早亮黃圈。原本的紅圈變灰，表示不會打在那裡。
+const seenTip=new Set();function firstTip(k){if(seenTip.has(k))return;seenTip.add(k);tip(k==="slip"?"手滑了！黃圈才是真正落點：追過去接住分數加倍，來不及就閃開":"要打噴嚏了！黃圈是噴嚏落點：接住加倍再回一片 OK 繃，或趕快閃",2.6,true)}
+function showGhost(){const on=(S.curve&&!S.sneeze)||(S.sneeze&&S.sn>0);ghost.visible=on;if(on){tint(ghost,0xffc83d);ghost.position.set(S.to.x,0.02,S.to.z);ghost.scale.setScalar(1+Math.sin(S.t*16)*0.08)}return on}
 function masterStep(dt){S.t+=dt;const p=P();
   switch(S.st){
   case "gap":if(X.masterOut>0.03){S.hover.x=master.position.x+0.6;S.hover.z=-1.2}S.a=lerp(S.a,0,damp(8,dt));S.lift=lerp(S.lift,1.5,damp(8,dt));poseHammer(hamM,FM,YM,S.hover,S.a,S.lift);
@@ -277,14 +286,14 @@ function masterStep(dt){S.t+=dt;const p=P();
     S.hover.x=lerp(S.hover.x,S.aim.x,damp(9,dt));S.hover.z=lerp(S.hover.z,S.aim.z,damp(9,dt));S.hover.y=HEADY;S.a=lerp(S.a,0,damp(8,dt));S.lift=lerp(S.lift,1.5+Math.sin(S.t*3)*0.06,damp(8,dt));poseHammer(hamM,FM,YM,S.hover,S.a,S.lift);
     ring.visible=true;tint(ring,0xfff4dc);ring.position.set(S.aim.x,0.02,S.aim.z);ring.scale.setScalar(1+Math.sin(S.t*9)*0.05);if(S.t>=S.aimD)lockNow();break}
   case "wind":{const wd=S.windD,k=eOut(Math.min(1,S.t/wd));S.cur.set(lerp(S.hover.x,S.lock.x,k),HEADY,lerp(S.hover.z,S.lock.z,k));let a=lerp(0,-1.1,k);const lift=lerp(1.5,0.6,k);
-    ring.visible=true;tint(ring,0xff4a3d);ring.position.set(S.lock.x,0.02,S.lock.z);ring.scale.setScalar(1);
-    if(S.sneeze){if(S.t>wd&&S.sn===0){S.sn=1;say("哈…",0.6)}if(S.t>wd+0.55&&S.sn===1){S.sn=2;say("哈……",0.6)}if(S.sn>0){const q=S.t-wd;a+=Math.sin(q*9)*0.12-0.15*Math.min(1,q)}
-      if(S.t>wd+1.05){S.sn=3;say("哈啾！！",0.9);SFX.sneeze();G.shake=0.12;S.from.copy(S.lock);S.to.copy(chooseTarget(S.lock,0.6,1.1));S.lock.copy(S.to);S.curve=true;S.strD=0.32;S.st="strike";S.t=0;S.a0=a}}
-    else if(S.t>=wd){S.from.copy(S.lock);if(S.curve){S.to.copy(chooseTarget(S.lock,0.45,0.8));S.strD+=0.2;say("手滑！",0.7)}else S.to.copy(S.lock);S.st="strike";S.t=0;S.a0=a;SFX.whoosh(0.18,600,2600)}
+    ring.visible=true;tint(ring,showGhost()?0x6f6a66:0xff4a3d);ring.position.set(S.lock.x,0.02,S.lock.z);ring.scale.setScalar(1);
+    if(S.sneeze){if(S.t>wd&&S.sn===0){S.sn=1;say("哈…",0.6);firstTip("sneeze")}if(S.t>wd+0.55&&S.sn===1){S.sn=2;say("哈……",0.6)}if(S.sn>0){const q=S.t-wd;a+=Math.sin(q*9)*0.12-0.15*Math.min(1,q)}
+      if(S.t>wd+1.05){S.sn=3;say("哈啾！！",0.9);SFX.sneeze();G.shake=0.12;S.from.copy(S.lock);S.lock.copy(S.to);S.curve=true;S.strD=0.32;S.st="strike";S.t=0;S.a0=a}}
+    else if(S.t>=wd){S.from.copy(S.lock);if(S.curve){S.strD+=0.2;say("手滑！",0.7)}else S.to.copy(S.lock);S.st="strike";S.t=0;S.a0=a;SFX.whoosh(0.18,600,2600)}
     S.a=a;S.lift=lift;poseHammer(hamM,FM,YM,S.cur,a,lift);break}
   case "strike":{const k=Math.min(1,S.t/S.strD),m=S.curve?eOut(Math.min(1,k/0.72)):1;S.cur.x=lerp(S.from.x,S.to.x,m);S.cur.z=lerp(S.from.z,S.to.z,m);S.cur.y=contactY(S.cur.x,S.cur.z);
     S.a=lerp(S.a0,A_HIT,eIn(k));S.lift=lerp(0.6,0,eIn(k));poseHammer(hamM,FM,YM,S.cur,S.a,S.lift);ring.visible=true;ring.position.set(S.cur.x,0.02,S.cur.z);
-    ghost.visible=S.curve;if(S.curve){tint(ghost,0xff4a3d);ghost.position.set(S.to.x,0.02,S.to.z)}
+    ghost.visible=S.curve;if(S.curve){tint(ghost,0xffc83d);ghost.position.set(S.to.x,0.02,S.to.z);ghost.scale.setScalar(1)}
     if(k>=1){ring.visible=ghost.visible=false;S.st="hit";S.t=0;S.lock.copy(S.to);dayImpact()}break}
   case "hit":poseHammer(hamM,FM,YM,S.cur,A_HIT,0);if(S.t>0.05){S.st="rec";S.t=0;S.recD=p.rec}break;
   case "rec":{const k=eOut(Math.min(1,S.t/S.recD));S.a=lerp(A_HIT,0,k);S.lift=lerp(0,1.5,k);S.hover.set(S.cur.x,HEADY,S.cur.z);poseHammer(hamM,FM,YM,new V3(S.cur.x,lerp(S.cur.y,HEADY,k),S.cur.z),S.a,S.lift);
@@ -410,7 +419,7 @@ function pause(){if(!playing()||paused)return;paused=true;drag=null;keys.clear()
 function unpause(){closeDialog();paused=false;$("sys").textContent=(mode==="night"?"夜班中":"白班中")+sysMod();if(F.on)buzz(true,0.04);canvas.focus({preventScroll:true});resume()}
 function help(){if(mode==="dayend"||mode==="over")return;const wasPlaying=playing()&&!paused;if(wasPlaying){paused=true;drag=null;keys.clear()}
   showDialog("HOW TO PLAY","操作指南",
-  '<div class="shiftcard"><i>'+PixelArt.icon("sun")+'</i><div><b>白班：扶釘子（30 秒）</b><p>拖曳畫面任何地方移動手。老師傅瞄哪裡就把釘子送過去，圓圈變紅就要落鎚了。正中＝釘平，擦到邊＝<strong>歪釘</strong>，敲到手指會腫、少一片 OK 繃。</p></div></div>'+
+  '<div class="shiftcard"><i>'+PixelArt.icon("sun")+'</i><div><b>白班：扶釘子（30 秒）</b><p>拖曳畫面任何地方移動手。老師傅瞄哪裡就把釘子送過去，圓圈變紅就要落鎚了。正中＝釘平，擦到邊＝<strong>歪釘</strong>，敲到手指會腫、少一片 OK 繃。師傅<strong>手滑</strong>或<strong>打噴嚏</strong>時，真正的落點會先亮<strong>黃圈</strong>（原本的紅圈變灰）：追過去接住分數加倍，噴嚏還多回一片 OK 繃；不想冒險就閃開。</p></div></div>'+
   '<div class="shiftcard"><i>'+PixelArt.icon("moon")+'</i><div><b>夜班：自己掄槌（35 秒）</b><p>拖曳移槌、放開敲擊（電腦用方向鍵＋空白鍵）。白班凸出來的釘子要補敲，正中釘心兩倍力。<strong>白班的歪釘你敲不動</strong>：把追著你的黃圈帶過去，紅圈鎖定就閃開，讓電磁怪代打。被吸到扣 4 秒。</p></div></div>'+
   '<div class="shiftcard"><i>'+PixelArt.icon("bandage")+'</i><div><b>兩班互相影響</b><p>白班手指被敲腫，夜班握槌會晃。OK 繃用完或夜班沒敲完就結束；撐過去就隔天再上班，越來越難。</p></div></div>'+
   '<div class="shiftcard"><i>'+PixelArt.icon("trophy")+'</i><div><b>裝備、工單、難度</b><p>每天過關可以三選一帶一樣裝備。第 2 天起可能抽到特殊工單（停電夜、蒼蠅季、電磁怪暴走…），難但分數加成。難度在主畫面選：輕鬆 ×0.8、標準 ×1、高手 ×1.5。</p></div></div>',
@@ -547,4 +556,3 @@ diffUI();$("record").textContent=String(best).padStart(4,"0");resize();
 if(location.hash==="#debug")window.__shift={scene,G,D,S,N,M,X,get mode(){return mode},startRun,gameOver};
 })();
 
-for(const ev of ["pointerdown","touchend","click","keydown"])document.addEventListener(ev,()=>unlock(),{capture:true});
