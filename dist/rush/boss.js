@@ -39,6 +39,54 @@ const ForgeBoss = (() => {
     return [[-60,0],[-30,-14],[0,4],[30,-12],[60,6]].map(([x, y]) => ({x, y}));
   }
 
+
+  // ── 魔王關鼓組：跟師傅的節拍對齊（每題加速，鼓也一起加速）──
+  // 出題時：大鼓每拍、拍手在反拍、腳踏鈸八分音符；
+  // 預備拍：小鼓十六分音符漸強「答答答答答答答答」；
+  // 作答時：大鼓＋拍手每拍，小鼓在每個反拍「答」，整體更趕。
+  let nbuf = null;
+  function hit(at, dur, vol, type, f, q = 1, to = null) {
+    const ac = audioCtx;
+    if (!soundOn || !ac || ac.state !== "running" || at < ac.currentTime - .01) return;
+    if (!nbuf) { nbuf = ac.createBuffer(1, ac.sampleRate, ac.sampleRate); const d = nbuf.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1; }
+    const src = ac.createBufferSource(), fl = ac.createBiquadFilter(), g = ac.createGain();
+    src.buffer = nbuf; fl.type = type; fl.frequency.setValueAtTime(f, at); if (to) fl.frequency.exponentialRampToValueAtTime(to, at + dur); fl.Q.value = q;
+    g.gain.setValueAtTime(vol, at); g.gain.exponentialRampToValueAtTime(.0001, at + dur);
+    src.connect(fl); fl.connect(g); g.connect(ac.destination); src.start(at, Math.random() * .5); src.stop(at + dur + .02);
+  }
+  const rel = at => Math.max(0, at - audioCtx.currentTime);
+  const kick = at => { tone(150, .16, "sine", .38, rel(at), 42); hit(at, .02, .12, "lowpass", 2000); };
+  const clap = (at, v = .26) => { for (let i = 0; i < 3; i++) hit(at + i * .011, .014, v, "bandpass", 1400, .9); hit(at + .033, .12, v * .8, "bandpass", 1150, .8); };
+  const snare = (at, v = .18) => { hit(at, .1, v, "highpass", 1700, .7); tone(190, .06, "triangle", v * .35, rel(at), 120); };
+  const hat = (at, v = .045) => hit(at, .028, v, "highpass", 7200, 1);
+  const bass = (at, b) => tone(note(b, 0) / 4, b.beat * .42, "triangle", .09, rel(at), note(b, 0) / 4.4);
+
+  function drumGrid(b) {
+    if (!audioCtx || audioCtx.state !== "running") return;
+    const half = b.beat / 2, now = audioCtx.currentTime;
+    if (b.drumH == null) b.drumH = Math.ceil((b.time - b.t0) / half);
+    for (;;) {
+      const tg = b.t0 + b.drumH * half;
+      if (tg > b.time + .12) break;
+      const h = b.drumH++;
+      if (tg < b.time - .02) continue;
+      const at = now + (tg - b.time), k = Math.floor(h / 2), off = h % 2 !== 0;
+      const answering = k >= ANSWER_AT && k < ANSWER_AT + 6, counting = k === ANSWER_AT - 2 || k === ANSWER_AT - 1;
+      hat(at, off ? .06 : .035);
+      if (off) bass(at, b);
+      if (counting) {
+        const base = (k - (ANSWER_AT - 2)) * 2 + (off ? 1 : 0);      // 0..3
+        for (let j = 0; j < 2; j++) snare(at + j * b.beat / 4, .07 + (base * 2 + j) * .022);
+        if (!off) kick(at);
+        continue;
+      }
+      if (!off) {
+        kick(at);
+        if (answering || (k > 0 && k % 2 === 1)) clap(at, answering ? .24 : .2);
+      } else if (answering) snare(at, .14);
+    }
+  }
+
   function newVolley(b) {
     b.wave++;
     b.beat = Math.max(.3, .44 - (b.wave - 1) * .016);
@@ -53,6 +101,7 @@ const ForgeBoss = (() => {
       shown: -1, state: "wait", judgedAt: 0, nx: p.x, ny: p.y
     }));
     b.called = 0; b.ticks = 0; b.cur = 0; b.hits = 0; b.clean = 0;
+    b.drumH = null;
     b.phase = "enter"; b.resultAt = 0; b.mood = "calm";
     S.nails = [];
     $("wave").textContent = "魔王第 " + b.wave + " 波　♩=" + Math.round(60 / b.beat);
@@ -140,6 +189,7 @@ const ForgeBoss = (() => {
     b.bob = Math.max(0, b.bob - dt);
     b.hurt = Math.max(0, b.hurt - dt);
     const t = b.time;
+    drumGrid(b);
 
     if (b.phase === "enter" && t >= b.t0 - .02) b.phase = "call";
     if (b.phase === "call" || b.phase === "count") {

@@ -184,7 +184,12 @@ const SFX={
   nail(){tone(390,0.105,"triangle",0.1,70);tone(750,0.072,"square",0.027)},lock(){tone(580,0.11);tone(790,0.1,"square",0.03,null,0.15)},
   caught(){tone(172,0.3,"sawtooth",0.04,45)},bait(){[470,700,940].forEach((f,i)=>tone(f,0.14,"square",0.038,null,i*0.065))},
   bell(){[540,720,960].forEach((f,i)=>tone(f,0.18,"triangle",0.08,null,i*0.09))},clank(){tone(165,0.09,"square",0.05);noise(0.05,0.3,"highpass",3000)},
-  over(){[392,330,262].forEach((f,i)=>tone(f,0.3+i*0.15,"triangle",0.18,null,i*0.25))}};
+  over(){[392,330,262].forEach((f,i)=>tone(f,0.3+i*0.15,"triangle",0.18,null,i*0.25))},
+  // 電磁怪：下降時鏈條嘩啦＋蒸汽「嘶—」；砸下「框」一聲金屬重擊＋「ㄘ」一團蒸汽噴出；升起時洩壓「噗咻」
+  mdrop(){noise(0.2,0.22,"bandpass",2200,0.9,6500);for(let i=0;i<4;i++)tone(1500+i*170,0.03,"square",0.018,null,i*0.035);tone(300,0.18,"sawtooth",0.03,90)},
+  mslam(){tone(105,0.34,"sine",0.55,38);[331,467,702,1043].forEach((f,i)=>tone(f,0.42-i*0.06,i%2?"triangle":"square",0.05-i*0.008));noise(0.09,0.6,"lowpass",900);
+    noise(0.42,0.3,"bandpass",5200,0.6,2600,0.07);noise(0.3,0.14,"highpass",7000,0.7,null,0.09)},
+  mrise(){noise(0.22,0.12,"bandpass",3000,1.2,1200,0.5);tone(220,0.16,"triangle",0.04,440,0.56)}};
 function buzz(on,vol=0.05){if(!live()){if(!on&&buzzO){try{buzzO.stop();buzzO._l.stop()}catch{}buzzO=null}return}const t=ac.currentTime;
   if(on&&!buzzO){buzzO=ac.createOscillator();buzzO.type="sawtooth";buzzO.frequency.value=210;const l=ac.createOscillator(),lg=ac.createGain();l.frequency.value=13;lg.gain.value=28;l.connect(lg);lg.connect(buzzO.frequency);l.start();
     const fl=ac.createBiquadFilter();fl.type="bandpass";fl.frequency.value=900;buzzG=ac.createGain();buzzG.gain.value=0.0001;buzzO.connect(fl);fl.connect(buzzG);buzzG.connect(out);buzzO.start();buzzO._l=l}
@@ -219,14 +224,30 @@ function mStep(i,t,ten,s16){const st=i%16,bar=Math.floor(i/16)%4,root=MBASS[bar]
   if(ten>0.6&&st%4===0)mOsc(mf(81),t,s16*1.6,"square",0.022,G1);
   // 蒸汽風琴：後兩小節出現（停電夜少一點）
   if(bar>=2&&st%2===0&&!(dark&&bar===2)){const n=MLEAD[(bar-2)*16+st];if(n){const f=mf(n+(ten>0.6?12:0));mOsc(f,t,s16*1.7,"square",0.03,G1,null,-8);mOsc(f,t,s16*1.7,"triangle",0.045,G1,null,8);mOsc(f*2,t,s16*0.6,"sine",0.012,G1)}}}
-function musicTick(){if(!ac||!out)return;const want=live()&&mode==="night"&&!paused,t=ac.currentTime;
+/* 白班配樂：G 大調輕快的工坊小調。撥弦低音「蹦—恰」、木魚、沙鈴、口哨旋律（擺盪八分音符）。
+   最後 8 秒加十六分沙鈴、稍微加快。 */
+const DBASS=[43,40,36,38],DMIN=[0,1,0,0];
+const DLEAD=[74,0,71,74,76,74,71,0, 71,0,67,71,74,71,67,0, 72,0,76,72,74,72,69,67, 69,0,66,69,74,0,0,0];
+function dStep(i,t,ten,s16){const st=i%16,bar=Math.floor(i/16)%4,loop=Math.floor(i/64),root=DBASS[bar],G1=MUS.g,sw=st%4===2?s16*0.32:0,tt=t+sw;
+  if(st===0||st===8)mOsc(mf(root-12+(st===8?7:0)),t,s16*2.6,"triangle",0.16,G1);
+  if(st===4||st===12){const tri=DMIN[bar]?[0,3,7]:[0,4,7];tri.forEach((k,j)=>mOsc(mf(root+12+k),t+j*0.012,s16*1.5,"triangle",0.028,G1))}
+  if(st===6||st===14)mOsc(st===6?880:660,tt,0.05,"sine",0.07,G1,420);
+  if(st%2===0)mNoise(st%4?tt:t,0.03,st%4?0.05:0.035,"highpass",6500,1);
+  if(ten>0.4&&st%2===1)mNoise(t,0.02,0.04,"highpass",7500,1);
+  if(st%2===0&&loop%3!==2){const n=DLEAD[bar*8+st/2];if(n){const f=mf(n-(loop%3===1?12:0));const o=ac.createOscillator(),g=ac.createGain(),l=ac.createOscillator(),lg=ac.createGain();
+    o.type=loop%3===1?"triangle":"sine";o.frequency.setValueAtTime(f*0.97,tt);o.frequency.exponentialRampToValueAtTime(f,tt+0.04);l.frequency.value=6;lg.gain.value=f*0.012;l.connect(lg);lg.connect(o.frequency);
+    g.gain.setValueAtTime(0.0001,tt);g.gain.exponentialRampToValueAtTime(0.06,tt+0.02);g.gain.exponentialRampToValueAtTime(0.0001,tt+s16*1.8);o.connect(g);g.connect(G1);o.start(tt);l.start(tt);o.stop(tt+s16*1.9);l.stop(tt+s16*1.9)}}}
+function musicTick(){if(!ac||!out)return;const t=ac.currentTime,night=mode==="night",day=mode==="day";
+  const want=live()&&!paused&&(night||day)?mode:null;
   if(!MUS.g){MUS.g=ac.createGain();MUS.g.gain.value=0.0001;MUS.g.connect(out);MUS.lp=ac.createBiquadFilter();MUS.lp.type="lowpass";MUS.lp.Q.value=6;MUS.lp.connect(MUS.g)}
-  if(want!==MUS.on){MUS.on=want;MUS.g.gain.cancelScheduledValues(t);MUS.g.gain.setTargetAtTime(want?0.42:0.0001,t,want?0.4:0.12);if(want){MUS.next=t+0.08;MUS.step=0}}
+  if(want!==MUS.on){MUS.on=want;MUS.g.gain.cancelScheduledValues(t);MUS.g.gain.setTargetAtTime(want?(night?0.42:0.3):0.0001,t,want?0.4:0.12);if(want){MUS.next=t+0.08;MUS.step=0}}
   if(!want)return;
-  const ten=clamp(1-(N.time-2)/12,0,1),bpm=112+ten*26+(G.mod==="rampage"?8:0),s16=60/bpm/4;
-  MUS.lp.frequency.setTargetAtTime(420+ten*1400,t,0.3);
   if(MUS.next<t)MUS.next=t+0.02;
-  while(MUS.next<t+0.16){mStep(MUS.step,MUS.next,ten,s16);MUS.next+=s16;MUS.step++}}
+  if(night){const ten=clamp(1-(N.time-2)/12,0,1),bpm=112+ten*26+(G.mod==="rampage"?8:0),s16=60/bpm/4;
+    MUS.lp.frequency.setTargetAtTime(420+ten*1400,t,0.3);
+    while(MUS.next<t+0.16){mStep(MUS.step,MUS.next,ten,s16);MUS.next+=s16;MUS.step++}}
+  else{const ten=clamp(1-(D.t-1)/8,0,1),s16=60/(100+ten*12)/4;
+    while(MUS.next<t+0.16){dStep(MUS.step,MUS.next,ten,s16);MUS.next+=s16;MUS.step++}}}
 function soundLabel(){const b=$("audio");b.setAttribute("aria-pressed",String(soundOn));b.querySelector("span").textContent=soundOn?"音效開":"音效關";icon(b.querySelector("i"),soundOn?"sound":"mute")}
 $("audio").onclick=()=>{soundOn=!soundOn;save("nail-panic.sound",soundOn?"1":"0");soundLabel();unlock();if(!soundOn)buzz(false);tone(660,0.1)};soundLabel();
 
@@ -398,8 +419,8 @@ function magnetImpact(){G.shake=0.27;M.sq=1;const at=new V3(M.x,0.05,M.z);burst(
 function magnetStep(dt){M.el+=dt;const lvl=clamp(G.day-1+DIFFS[diff].mag,-1,5.5);
   if(M.phase==="rest"){if(M.el>=M.wait){M.phase="track";M.el=0;const a=aimPoint();M.x=a.x;M.z=a.z}return}
   if(M.phase==="track"){const a=aimPoint();M.x=a.x;M.z=a.z;if(M.el>=1.05-lvl*0.07){M.phase="lock";M.el=0;SFX.lock()}return}
-  if(M.phase==="lock"){if(M.el>=0.86-lvl*0.08){M.phase="slam";M.el=0}return}
-  if(M.phase==="slam"){if(M.el>=0.19){M.phase="recover";M.el=0;magnetImpact()}return}
+  if(M.phase==="lock"){if(M.el>=0.86-lvl*0.08){M.phase="slam";M.el=0;SFX.mdrop()}return}
+  if(M.phase==="slam"){if(M.el>=0.19){M.phase="recover";M.el=0;SFX.mslam();SFX.mrise();magnetImpact()}return}
   if(M.phase==="recover"&&M.el>=0.56){M.phase="rest";M.el=0;M.wait=G.mod==="rampage"?0.15:1.2-lvl*0.12+Math.random()*0.42}}
 function nightStep(dt){
   N.time=Math.max(0,N.time-dt);const left=Math.ceil(N.time);if(left<=8&&left<N.lastTick)tone(left<=3?790:480,0.07,"triangle",0.06);N.lastTick=left;
