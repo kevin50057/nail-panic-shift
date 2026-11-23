@@ -158,7 +158,7 @@ function starRing(){for(let i=0;i<3;i++){const m=new THREE.Mesh(starGeo,pM.hot);
 
 /* ================= audio (both cabinets' sounds) ================= */
 let ac=null,out=null,nb=null,buzzO=null,buzzG=null;
-function unlock(){if(!soundOn)return;try{if(!ac){ac=new(window.AudioContext||window.webkitAudioContext)();out=ac.createGain();out.gain.value=0.55;out.connect(ac.destination);
+function unlock(){if(!soundOn)return;try{if(navigator.audioSession)navigator.audioSession.type="playback"}catch{}try{if(!ac){ac=new(window.AudioContext||window.webkitAudioContext)();out=ac.createGain();out.gain.value=0.55;out.connect(ac.destination);
   nb=ac.createBuffer(1,ac.sampleRate,ac.sampleRate);const d=nb.getChannelData(0);for(let i=0;i<d.length;i++)d[i]=Math.random()*2-1}if(ac.state==="suspended")ac.resume().catch(()=>{})}catch{ac=null}}
 const live=()=>soundOn&&ac&&ac.state==="running";
 function tone(f,dur,type="square",vol=0.035,to=null,delay=0){if(!live())return;const t=ac.currentTime+delay,o=ac.createOscillator(),g=ac.createGain();o.type=type;o.frequency.setValueAtTime(f,t);if(to)o.frequency.exponentialRampToValueAtTime(Math.max(24,to),t+dur);
@@ -541,3 +541,5 @@ function diffUI(){$("diff").replaceChildren(...DIFFS.map((d,i)=>{const b=documen
 diffUI();$("record").textContent=String(best).padStart(4,"0");resize();
 if(location.hash==="#debug")window.__shift={scene,G,D,S,N,M,X,get mode(){return mode},startRun,gameOver};
 })();
+
+document.addEventListener("pointerdown",()=>unlock(),{capture:true});

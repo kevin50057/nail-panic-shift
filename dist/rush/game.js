@@ -17,7 +17,7 @@ const coldColors=["#d5faff","#6bede0","#77aecf","#fafbc9"];
 function soundLabel(){const b=$("audio");b.setAttribute("aria-pressed",String(soundOn));b.querySelector("span").textContent=soundOn?"音效開":"音效關";b.querySelector("i").innerHTML=PixelArt.icon(soundOn?"sound":"mute")}
 for(const i of document.querySelectorAll("[data-icon]"))i.innerHTML=PixelArt.icon(i.dataset.icon);
 soundLabel();$("record").textContent=String(best).padStart(4,"0");
-function unlock(){if(!soundOn)return;try{const A=window.AudioContext||window.webkitAudioContext;if(A&&!audioCtx)audioCtx=new A();if(audioCtx?.state==="suspended")audioCtx.resume().catch(()=>{})}catch{}}
+function unlock(){if(!soundOn)return;try{if(navigator.audioSession)navigator.audioSession.type="playback"}catch{}try{const A=window.AudioContext||window.webkitAudioContext;if(A&&!audioCtx)audioCtx=new A();if(audioCtx?.state==="suspended")audioCtx.resume().catch(()=>{})}catch{}}
 function tone(freq,dur=.1,type="square",vol=.035,delay=0,end=freq){
   if(!soundOn||!audioCtx||audioCtx.state!=="running")return;
   const t=audioCtx.currentTime+delay,o=audioCtx.createOscillator(),g=audioCtx.createGain();o.type=type;o.frequency.setValueAtTime(freq,t);o.frequency.exponentialRampToValueAtTime(Math.max(24,end),t+dur);g.gain.setValueAtTime(.0001,t);g.gain.exponentialRampToValueAtTime(vol,t+.006);g.gain.exponentialRampToValueAtTime(.0001,t+dur);o.connect(g);g.connect(audioCtx.destination);o.start(t);o.stop(t+dur+.015);
@@ -199,4 +199,10 @@ window.addEventListener("blur",()=>{if(screenMode==="play")pause()});
 document.addEventListener("visibilitychange",()=>{if(document.hidden&&screenMode==="play")pause()});
 new ResizeObserver(()=>{if(screenMode!=="home"){art.resize();art.frame(S)}}).observe($("screen"));
 
-if (new URLSearchParams(location.search).has("boss")) start(true);
+// 直挑魔王：先等玩家點一下（瀏覽器要求有點擊才能出聲），再開始出題。
+if (new URLSearchParams(location.search).has("boss")) {
+  const gate=document.createElement("button");gate.id="tapGate";gate.innerHTML="<b>點一下開始魔王關</b><span>老師傅出題要聽聲音，記得開音量</span>";
+  $("screen").append(gate);gate.focus({preventScroll:true});
+  gate.onclick=()=>{gate.remove();unlock();start(true);setTimeout(()=>tone(660,.08,"triangle",.06),30)};
+}
+document.addEventListener("pointerdown",unlock,{capture:true});
