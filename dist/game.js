@@ -9,10 +9,9 @@ const reduced=matchMedia("(prefers-reduced-motion: reduce)").matches;
 const S={};
 const plans=[
   [[0,12],[-65,-7],[58,17]],
-  [[-63,18,1],[0,-14],[62,16,2]],
-  [[-50,-8,2],[0,27,1],[60,-9,3]]
+  [[-63,18,1],[0,-14],[62,16,2]]
 ];
-const names=["開工熱身","電磁鎖釘","黃金收工釘"];
+const names=["開工熱身","電磁鎖釘"];
 const hotColors=["#ffe886","#ffbb48","#e88641","#fff2c8"];
 const coldColors=["#d5faff","#6bede0","#77aecf","#fafbc9"];
 function soundLabel(){const b=$("audio");b.setAttribute("aria-pressed",String(soundOn));b.querySelector("span").textContent=soundOn?"音效開":"音效關";b.querySelector("i").innerHTML=PixelArt.icon(soundOn?"sound":"mute")}
@@ -36,28 +35,33 @@ $("audio").onclick=()=>{soundOn=!soundOn;save("nail-panic.sound",soundOn?"1":"0"
 function announce(message){$("announcer").textContent=message}
 function tip(message,ttl=1.35,hot=false){S.tip=message;S.tipTime=ttl;S.tipHot=hot}
 function loadWave(index){
-  S.round=index;const dir=Math.random()<.5?-1:1;
-  S.nails=plans[index].map(([x,base,type=0])=>{const hp=type===3?4:type===1?1:2;return {x:x*dir,base,y:base-12,hp,max:hp,heavy:type>=2,shield:type===1}});
+  S.round=index;
+  if (index === 2) { ForgeBoss.enter(); return; }const dir=Math.random()<.5?-1:1;
+  S.nails=plans[index].map(([x,base,type=0])=>{const hp=type===1?1:2;return {x:x*dir,base,y:base-12,hp,max:hp,heavy:type>=2,shield:type===1}});
   S.magnet={phase:"rest",elapsed:0,wait:index===0?1.35:.85,x:0,y:0};S.transition=0;
   $("wave").textContent="第 "+(index+1)+" / 3 輪　"+names[index];
-  tip(["對準釘頭，放開或按空白鍵敲擊","藍環鎖釘要引電磁怪來敲！","最後三根！金色長釘得多敲幾下"][index],index===0?2.6:2.5);
+  tip(["對準釘頭，放開或按空白鍵敲擊","藍環鎖釘要引電磁怪來敲！"][index],index===0?2.6:2.5);
   announce($("wave").textContent);
 }
 function resetRun(){
-  Object.assign(S,{aim:{x:0,y:0},round:0,cleared:0,points:0,combo:0,bestCombo:0,perfect:0,baits:0,time:45,t:0,stun:0,swing:0,shake:0,transition:0,hover:false,pop:null,particles:[],tip:"",tipTime:0,tipHot:false,reduced,lastTick:46});
+  Object.assign(S,{boss:null,stroke:null,aim:{x:0,y:0},round:0,cleared:0,points:0,combo:0,bestCombo:0,perfect:0,baits:0,time:45,t:0,stun:0,swing:0,shake:0,transition:0,hover:false,pop:null,particles:[],tip:"",tipTime:0,tipHot:false,reduced,lastTick:46});
   loadWave(0);
 }
-function start(){
+function start(bossOnly=false){
   closeDialog();unlock();resetRun();screenMode="play";document.body.classList.add("playing");
   $("home").hidden=true;$("field").hidden=false;$("livebar").hidden=false;$("hint").hidden=false;
   $("sys").textContent="挑戰中";$("timeLabel").textContent="剩餘時間";$("targetLabel").textContent="已敲入";
+  $("timeUnit").textContent="秒";$("modeText").textContent="TIME ATTACK";
+  document.querySelector(".time > i").innerHTML=PixelArt.icon("clock");
+  if (bossOnly === true) loadWave(2);
   keys.clear();drag=null;art.resize();$("field").focus({preventScroll:true});beat.bell();renderUI();art.frame(S);resumeLoop();
 }
 function goHome(){
-  closeDialog();screenMode="home";cancelAnimationFrame(raf);document.body.classList.remove("playing","danger");
+  closeDialog();$("sequence").hidden=true;screenMode="home";cancelAnimationFrame(raf);document.body.classList.remove("playing","danger");
   $("home").hidden=false;$("field").hidden=true;$("livebar").hidden=true;$("hint").hidden=true;
   $("sys").textContent="待機中";$("timeLabel").textContent="時間限制";$("targetLabel").textContent="目標釘數";
-  $("timer").textContent="45";$("count").textContent="09";$("score").textContent="0000";$("start").focus({preventScroll:true})
+  document.querySelector(".time > i").innerHTML=PixelArt.icon("clock");
+  $("timer").textContent="45";$("timeUnit").textContent="秒";$("modeText").textContent="TIME ATTACK";$("count").textContent="06";$("score").textContent="0000";$("start").focus({preventScroll:true})
 }
 function nearest(x,y){
   let item=null,d=Infinity;for(const n of S.nails){if(n.hp<=0)continue;const gap=Math.hypot(x-n.x,(y-n.y)*1.25);if(gap<d){item=n;d=gap}}return {n:item,d};
@@ -77,12 +81,23 @@ function scoreHit(n,kind){
   if(bait){beat.bait();tip("借力打釘！電磁怪替你敲了一根",1.55)}
   else if(perfect){beat.perfect();tip("正中釘心！　連擊 ×"+S.combo,.85)}
   else{beat.nail();tip("敲中了！再補一槌",.8)}
-  if(S.nails.every(i=>i.hp===0)){if(S.cleared===9)finish(true);else{S.transition=1;tip("這塊木樁完成了！",1);beat.bell()}}
+  if(S.nails.every(i=>i.hp===0)){S.transition=1;tip("這塊木樁完成了！",1);beat.bell()}
 }
 function strike(){
   if(screenMode!=="play"||S.transition>0||S.stun>0||S.swing>0)return;
-  S.swing=.22;const {n,d}=nearest(S.aim.x,S.aim.y);
-  if(!n||d>12){beat.tap();S.combo=0;popup("MISS",S.aim.x,S.aim.y,"#f1b19c");tip("敲空了，準星要對著釘頭",.9);return}
+  S.swing = .27;
+  const {n,d} = nearest(S.aim.x,S.aim.y);
+  S.stroke = {x:S.aim.x, y:S.aim.y, nail:n, distance:d, pending:true};
+}
+function contact(stroke){
+  const {nail:n,distance:d,x,y}=stroke;
+  if (!n || d>12 || n.hp<=0 || !S.nails.includes(n)) {
+    if (!S.boss || S.boss.phase==="counter") {
+      beat.tap(); S.combo=0; popup("MISS",x,y,"#f1b19c");
+    }
+    return;
+  }
+  if (S.boss) { ForgeBoss.counterHit(n,d); return; }
   if(n.shield){tone(165,.09,"square");sparks(n.x,n.y,coldColors);tip("鎖釘！停在藍環，紅圈定住就閃",1.4,true);return}
   scoreHit(n,d<=5.8?"perfect":"hit");
 }
@@ -102,22 +117,32 @@ function magnetStep(dt){
   if(m.phase==="recover"&&m.elapsed>=.56){m.phase="rest";m.elapsed=0;m.wait=1.20-S.round*.17+Math.random()*.42}
 }
 function step(dt){
-  S.t+=dt;S.time=Math.max(0,S.time-dt);if(S.time===0){finish(false);return}
-  const left=Math.ceil(S.time);if(left<=8&&left<S.lastTick)tone(left<=3?790:480,.07,"triangle",.06);S.lastTick=left;
+  S.t+=dt;
+  if (!S.boss && S.transition<=0) {
+    S.time=Math.max(0,S.time-dt);
+    if (!S.time) {finish();return;}
+    const left=Math.ceil(S.time);
+    if(left<=8&&left<S.lastTick)tone(left<=3?790:480,.07,"triangle",.06);
+    S.lastTick=left;
+  }
   const dx=(keys.has("ArrowRight")?1:0)-(keys.has("ArrowLeft")?1:0),dy=(keys.has("ArrowDown")?1:0)-(keys.has("ArrowUp")?1:0);
   if((dx||dy)&&S.stun<=0){const factor=106*dt/Math.hypot(dx,dy);move(dx*factor,dy*factor*.82)}
   S.swing=Math.max(0,S.swing-dt);S.stun=Math.max(0,S.stun-dt);S.shake=Math.max(0,S.shake-dt*9);S.tipTime=Math.max(0,S.tipTime-dt);
-  if(S.transition>0){S.transition-=dt;if(S.transition<=0)loadWave(S.round+1)}else magnetStep(dt);
+  if (S.stroke?.pending && S.swing <= .12) { S.stroke.pending=false; contact(S.stroke); }
+  if (S.boss) ForgeBoss.step(dt);
+  else if(S.transition>0){S.transition-=dt;if(S.transition<=0)loadWave(S.round+1)}else magnetStep(dt);
   S.hover=nearest(S.aim.x,S.aim.y).d<=12;
   for(const p of S.particles){p.x+=p.vx*dt;p.y+=p.vy*dt;p.vy+=104*dt;p.life-=dt}
   S.particles=S.particles.filter(p=>p.life>0);if(S.pop){S.pop.ttl-=dt;if(S.pop.ttl<0)S.pop=null}
-  if(screenMode==="play"&&S.time<=0)finish(false);
+  if(screenMode==="play"&&!S.boss&&S.time<=0)finish();
 }
 function display(el,value){if(el.textContent!==value)el.textContent=value}
 function renderUI(){
-  display($("timer"),String(Math.ceil(S.time)).padStart(2,"0"));display($("count"),String(S.cleared).padStart(2,"0"));display($("score"),String(S.points).padStart(4,"0"));
-  const m=S.magnet.phase;const msg=m==="track"?"黃圈追蹤中，把它帶到釘頭":m==="lock"||m==="slam"?"紅圈鎖定！快閃開！":S.tipTime>0?S.tip:"拖曳移槌，放開敲擊";
-  display($("hint"),msg);$("hint").classList.toggle("hot",m==="track"||m==="lock"||m==="slam"||(S.tipTime>0&&S.tipHot));document.body.classList.toggle("danger",S.time<9);
+  display($("timer"),String(S.boss ? S.boss.lives : Math.ceil(S.time)).padStart(2,"0"));display($("count"),String(S.boss ? S.boss.blocks : S.cleared).padStart(2,"0"));display($("score"),String(S.points).padStart(4,"0"));
+  const m=S.magnet.phase;const msg=S.boss?ForgeBoss.hint(S.boss):m==="track"?"黃圈追蹤中，把它帶到釘頭":m==="lock"||m==="slam"?"紅圈鎖定！快閃開！":S.tipTime>0?S.tip:"拖曳移槌，放開敲擊";
+  $("sequence").hidden = !S.boss;
+  if (S.boss) ForgeBoss.showSequence(S.boss);
+  display($("hint"),msg);$("hint").classList.toggle("hot",m==="track"||m==="lock"||m==="slam"||(S.tipTime>0&&S.tipHot));document.body.classList.toggle("danger",S.boss ? S.boss.lives===1 : S.time<9);
 }
 function loop(now){
   if(screenMode!=="play")return;
@@ -134,22 +159,25 @@ function showDialog(tag,title,content,actions,kind){
 function closeDialog(){modal="";if($("dialog").open)$("dialog").close()}
 function freeze(){screenMode="paused";drag=null;keys.clear();cancelAnimationFrame(raf);$("sys").textContent="已暫停"}
 function unfreeze(){closeDialog();screenMode="play";$("sys").textContent="挑戰中";$("field").focus({preventScroll:true});resumeLoop()}
-function pause(){if(screenMode!=="play")return;freeze();showDialog("PAUSE","暫停中","<p>倒數已停在這一刻。</p>",[["繼續遊戲",unfreeze,true],["回到主畫面",goHome,false]],"pause")}
+function pause(){if(screenMode!=="play")return;freeze();showDialog("PAUSE","暫停中","<p>按繼續，從剛才的動作接著玩。</p>",[["繼續遊戲",unfreeze,true],["回到主畫面",goHome,false]],"pause")}
 function help(){
   if(screenMode==="play")freeze();const paused=screenMode==="paused";
-  showDialog("HOW TO PLAY","操作指南",'<div class="rule"><i>1</i><div><b>移槌，放開就敲</b><p>在遊戲區任意處按住並滑動，移動準星，放開就敲。電腦也能用方向鍵移動、空白鍵敲擊。</p></div></div><div class="rule"><i>2</i><div><b>對準釘心，少敲一槌</b><p>正中釘心有兩倍敲擊力。45 秒內敲完三輪共九根釘子，剩餘秒數會換成分數。</p></div></div><div class="rule"><i>3</i><div><b>黃圈誘敵，紅圈閃人</b><p>把追著你的黃圈帶到釘頭。圈變紅、位置固定就移開！怪物會替你打釘，<strong>藍環鎖釘只能靠牠敲入</strong>。被吸到扣四秒。</p></div></div>',[[paused?"繼續遊戲":"開始遊戲",paused?unfreeze:start,true]],"help");
+  showDialog("HOW TO PLAY","操作指南",'<div class="rule"><i>1</i><div><b>移槌，放開就敲</b><p>在遊戲區任意處按住並滑動，移動準星，放開就敲。電腦也能用方向鍵移動、空白鍵敲擊。</p></div></div><div class="rule"><i>2</i><div><b>對準釘心，少敲一槌</b><p>正中釘心有兩倍敲擊力。45 秒內完成前兩輪六根釘子，即可進入無限魔王關。</p></div></div><div class="rule"><i>3</i><div><b>黃圈誘敵，紅圈閃人</b><p>把追著你的黃圈帶到釘頭。圈變紅、位置固定就移開！怪物會替你打釘，<strong>藍環鎖釘只能靠牠敲入</strong>。被吸到扣四秒。</p></div></div><div class="rule"><i>4</i><div><b>五連砸，找空檔反擊</b><p>魔王關有三命。看磁怪亮燈的順序，左右閃開紅道。連砸結束後敲金釘，每三根回復一命，最多三命。存活越久，敵人越多。</p></div></div>',[[paused?"繼續遊戲":"開始遊戲",paused?unfreeze:start,true]],"help");
 }
-function finish(win){
-  if(screenMode!=="play")return;screenMode="over";keys.clear();drag=null;cancelAnimationFrame(raf);
-  const bonus=win?Math.floor(S.time)*20:0;S.points+=bonus;const high=S.points>best;if(high){best=S.points;save("nail-panic.best",String(best));$("record").textContent=String(best).padStart(4,"0")}
-  renderUI();art.frame(S);$("sys").textContent=win?"挑戰成功":"時間到";$("hint").hidden=true;
-  if(win)beat.bell();else beat.catch();
-  const row=(a,b)=>'<div><span>'+a+'</span><b>'+b+'</b></div>';
-  const summary='<div class="resultScore">'+String(S.points).padStart(4,"0")+'</div><p>'+(high?"本機最高分更新！":win?"下班鈴響以前，九根全數完工。":"下班鈴響了。下一班，再跟電磁怪較量。")+'</p><div class="resultRows">'+row("完成釘數",S.cleared+" / 9")+row("正中釘心",S.perfect+" 槌")+row("騙怪代打",S.baits+" 根")+row("最長連擊",S.bestCombo)+(win?row("提早收工獎勵","+"+bonus):"")+'</div>';
-  showDialog(win?"SHIFT CLEAR":"TIME UP",win?"打卡下班！":"收工時間到！",summary,[["再玩一局",start,true],["主畫面",goHome,false]],"result");
+function finish(){
+  if(screenMode!=="play")return;
+  screenMode="over";keys.clear();drag=null;cancelAnimationFrame(raf);
+  const high=S.points>best;
+  if(high){best=S.points;save("nail-panic.best",String(best));$("record").textContent=String(best).padStart(4,"0")}
+  const boss=S.boss;
+  renderUI();art.frame(S);$("sys").textContent=boss?"挑戰結束":"時間到";$("hint").hidden=true;beat.catch();
+  const row=(label,value)=>'<div><span>'+label+'</span><b>'+value+'</b></div>';
+  const results=boss ? row("抵達波次",boss.wave)+row("存活時間",Math.floor(boss.time)+" 秒")+row("反擊金釘",boss.blocks+" 根") : row("熱身釘數",S.cleared+" / 6");
+  const summary='<div class="resultScore">'+S.points+'</div><p>'+(high?"本機最高分更新！":boss?"磁怪收隊，下次再戰。":"下班鈴響了。")+'</p><div class="resultRows">'+results+row("正中釘心",S.perfect+" 槌")+'</div>';
+  showDialog(boss?"BOSS RUSH":"TIME UP",boss?"最後一命用完了":"收工時間到！",summary,[[boss?"再戰魔王":"再玩一局",()=>start(Boolean(boss)),true],["主畫面",goHome,false]],"result");
 }
 function dismiss(){if(modal==="result")goHome();else if(screenMode==="paused")unfreeze();else closeDialog()}
-$("start").onclick=start;$("help").onclick=help;$("pause").onclick=pause;$("close").onclick=dismiss;
+$("start").onclick=()=>start();$("bossStart").onclick=()=>start(true);$("help").onclick=help;$("pause").onclick=pause;$("close").onclick=dismiss;
 $("dialog").addEventListener("cancel",e=>{e.preventDefault();dismiss()});
 const field=$("field");
 field.addEventListener("pointerdown",e=>{if(screenMode!=="play"||drag||e.button!==0)return;e.preventDefault();unlock();field.focus({preventScroll:true});field.setPointerCapture(e.pointerId);drag={id:e.pointerId,x:e.clientX,y:e.clientY}});

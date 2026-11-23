@@ -1,26 +1,27 @@
 <!doctype html>
 <html lang="zh-Hant">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><meta name="theme-color" content="#0d1119"><meta name="description" content="夜班打卡前的最後 45 秒。敲下九根釘子，小心頭頂虎視眈眈的電磁怪。"><title>最後一槌！ NAIL PANIC!｜深夜街機</title><link rel="icon" href="data:,"><link rel="stylesheet" href="./game.css"></head>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><meta name="theme-color" content="#0d1119"><meta name="description" content="限時敲釘，再用三條命挑戰無限電磁連砸。"><title>最後一槌！ NAIL PANIC!｜深夜街機</title><link rel="icon" href="data:,"><link rel="stylesheet" href="./game.css"></head>
 <body>
 <header class="mast"><div class="width headrow"><div class="brand"><i data-icon="arcade"></i><span>深夜街機<small>MIDNIGHT ARCADE</small></span></div><nav><button id="audio" aria-label="音效" aria-pressed="true"><i data-icon="sound"></i><span>音效開</span></button><button id="help"><i data-icon="pad"></i><span>操作指南</span></button></nav></div></header>
 <main class="width">
 <section class="cabinet" aria-label="最後一槌遊戲機">
-<div class="statusbar"><div class="status"><i></i><span id="sys">待機中</span></div><div class="mode"><span class="signal" aria-hidden="true">▂▄▆</span> TIME ATTACK</div></div>
+<div class="statusbar"><div class="status"><i></i><span id="sys">待機中</span></div><div class="mode"><span class="signal" aria-hidden="true">▂▄▆</span> <span id="modeText">TIME ATTACK</span></div></div>
 <div class="screen" id="screen">
 <div class="home" id="home">
 <div class="keyart"></div><div class="shade"></div><div class="homecopy">
-<div class="tag"><span></span> 限時街機挑戰</div>
+<div class="tag"><span></span> 夜班敲釘挑戰</div>
 <h1 aria-label="NAIL PANIC!"><span>NAIL</span><b>PANIC!</b></h1>
-<h2>最後一槌！</h2><p>趕在下班鈴響前敲完九根釘子。<br>當心，頭頂的電磁怪盯上你的鐵槌了。</p>
-<button class="primary" id="start"><i data-icon="play"></i>開始遊戲</button></div>
+<h2>最後一槌！</h2><p>趕在鈴響前敲完六根釘子。<br>帶著三條命，迎戰電磁怪的五連砸。</p>
+<div class="startActions"><button class="primary" id="start"><i data-icon="play"></i>開始遊戲</button><button class="secondary" id="bossStart">直挑魔王</button></div></div>
 </div>
 <canvas id="field" tabindex="0" aria-label="敲釘子遊戲區。按住拖曳移槌，放開敲擊，或以方向鍵與空白鍵操作。" hidden></canvas>
 <div id="livebar" hidden><b id="wave"></b><button id="pause" aria-label="暫停"><i data-icon="pause"></i></button></div>
+<div id="sequence" aria-label="連砸道次" hidden></div>
 <div id="hint" hidden></div>
 </div>
 <div class="readouts">
-<div class="stat time"><i data-icon="clock"></i><div><span class="statlabel" id="timeLabel">時間限制</span><div class="number"><b id="timer">45</b><small>秒</small></div></div></div>
-<div class="stat target"><i data-icon="nail"></i><div><span class="statlabel" id="targetLabel">目標釘數</span><div class="number"><b id="count">09</b><small>根</small></div></div></div>
+<div class="stat time"><i data-icon="clock"></i><div><span class="statlabel" id="timeLabel">時間限制</span><div class="number"><b id="timer">45</b><small id="timeUnit">秒</small></div></div></div>
+<div class="stat target"><i data-icon="nail"></i><div><span class="statlabel" id="targetLabel">目標釘數</span><div class="number"><b id="count">06</b><small>根</small></div></div></div>
 <div class="stat score"><i data-icon="bolt"></i><div><span class="statlabel">本局得分</span><div class="number"><b id="score">0000</b></div></div></div>
 <div class="stat best"><i data-icon="trophy"></i><div><span class="statlabel">最高紀錄</span><div class="number"><b id="record">0000</b></div></div></div>
 </div></section>
@@ -28,4 +29,4 @@
 </main>
 <dialog id="dialog"><div class="dialogBody"><div class="dialogTop"><span id="dialogTag">HOW TO PLAY</span><button id="close" aria-label="關閉">×</button></div><h2 id="dialogTitle"></h2><div id="dialogContent"></div><div class="actions" id="dialogActions"></div></div></dialog>
 <div id="announcer" aria-live="polite" class="sr"></div>
-<script src="./art.js"></script><script src="./game.js"></script></body></html>
+<script src="./art.js"></script><script src="./boss.js"></script><script src="./game.js"></script></body></html>

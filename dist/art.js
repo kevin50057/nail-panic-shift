@@ -24,6 +24,14 @@ const PixelArt = (() => {
     const ctx=canvas.getContext("2d",{alpha:false});
     const stump = new Image();
     stump.src = "./stump.webp";
+    const hammerFrames = new Image(), magnetFrames = new Image();
+    hammerFrames.src = "./hammer.webp";
+    magnetFrames.src = "./magnet.webp";
+    function sprite(sheet, frame, x, y, size) {
+      if (!sheet.naturalWidth) return false;
+      ctx.drawImage(sheet, frame*144, 0, 144, 144, x, y, size, size);
+      return true;
+    }
     let width,height,scale,cx,cy,back,wood;
     function rect(c,x,y,w,h,g=ctx){g.fillStyle=c;g.fillRect(Math.round(x),Math.round(y),Math.round(w),Math.round(h))}
     function poly(c,points,g=ctx){g.fillStyle=c;g.beginPath();points.forEach(([x,y],i)=>i?g.lineTo(Math.round(x),Math.round(y)):g.moveTo(Math.round(x),Math.round(y)));g.closePath();g.fill()}
@@ -67,9 +75,17 @@ const PixelArt = (() => {
       if(n.shield&&!done){ring("#296b84",x,y,11,6,2);ring("#7bf4f0",x,y,10,5,1);rect("#294659",x-3,y-4,6,5);rect("#8dece1",x-2,y-7,4,1);rect("#8dece1",x-3,y-6,1,3);rect("#8dece1",x+2,y-6,1,3)}
       if(!done&&!n.shield)rect(heavy?"#ad6937":"#748594",x+1,y-1,3,1);
     }
-    function magnet(x,y,t,kind){
+    function magnet(x,y,t,kind,size=1){
       ctx.save();ctx.translate(x,y);if(kind==="impact")ctx.rotate(Math.sin(t*40)*.025);
-      for(let a=-9,i=0;a>-(height/scale+28);a-=6,i++){rect("#131c2b",-3,a-5,6,7);rect(i%2?"#536678":"#718090",-2,a-4,4,5);rect("#263546",-1,a-3,2,3)}
+      ctx.scale(size,size);
+      const tracking=kind==="rest" || kind==="track";
+      const sway=tracking ? Math.sin(t*4)*3 : 0;
+      for(let a=-9,i=0;a>-(height/scale+28)/size;a-=6,i++) {
+        const offset=sway*Math.sin((-a-9)*.045);
+        rect("#131c2b",offset-3,a-5,6,7);rect(i%2?"#536678":"#718090",offset-2,a-4,4,5);rect("#263546",offset-1,a-3,2,3);
+      }
+      const pose=tracking ? Math.floor((Math.sin(t*4)+1)*1.5) : kind==="impact"?6:4;
+      if (sprite(magnetFrames,pose,-31,-30,62)) {ctx.restore();return;}
       poly("#161d2a",[[-19,-9],[-13,-16],[11,-16],[19,-10],[21,10],[16,18],[8,17],[5,5],[-5,5],[-9,17],[-17,17],[-22,11]]);
       poly("#992f3b",[[-18,-8],[-12,-14],[10,-14],[17,-8],[19,10],[15,15],[9,14],[6,1],[-6,1],[-10,14],[-16,14],[-19,10]]);
       poly("#de5147",[[-16,-8],[-10,-13],[8,-13],[14,-9],[14,-4],[-9,-3],[-13,8],[-18,7]]);
@@ -81,6 +97,9 @@ const PixelArt = (() => {
       rect("#47404b",-7,-17,13,4);rect("#e9ac49",-5,-16,4,2);rect("#e9ac49",2,-16,3,2);ctx.restore();
     }
     function hammer(x,y,swing,t){
+      const pose=Math.min(8,Math.floor(swing*9));
+      const spriteLift=[8,9,10,8,4,0,2,5,8][pose];
+      if (sprite(hammerFrames,pose,x-24,y-59-spriteLift,75)) return;
       const a=swing>0?Math.sin(swing*Math.PI):0;
       ctx.save();ctx.translate(x,y);ellipse("#573e3455",8,9,15,3);
       const lift=20+(1-a)*5;ctx.translate(2,-lift*(1-a));ctx.rotate(-.57-.21*(1-a));
@@ -93,6 +112,45 @@ const PixelArt = (() => {
       poly("#afbfc2",[[-10,-10],[-4,-13],[6,-11],[3,-8],[-7,-7]]);poly("#72868e",[[-9,-6],[-6,-7],[-7,8],[-10,5]]);
       poly("#d4e2d9",[[-10,6],[5,9],[6,12],[1,13],[-10,10]]);rect("#d0a04b",-1,-7,4,4);ctx.restore();
     }
+    function bossFormation(s) {
+      const b=s.boss, lanes=ForgeBoss.centers, current=b.order[b.index];
+      const warning=b.phase==="attack" || b.phase==="hold";
+      const lit=warning || b.phase==="preview";
+      const elapsed=b.time-b.impactTime;
+      ctx.save();
+      ctx.beginPath();ctx.ellipse(0,0,123,50,0,0,Math.PI*2);ctx.clip();
+      for(let i=0;i<lanes.length;i++) {
+        const left=lanes[i]-23;
+        if (lit && current.lane===i) rect(warning?"#ee434c99":"#ffcf546b",left,-52,46,104);
+        if (i===b.lastLane && elapsed<.14) rect("#fff2be88",left,-52,46,104);
+        if (i>0) rect("#452b2588",left,-50,1,100);
+      }
+      ctx.restore();
+      for(let lane=0;lane<lanes.length;lane++) {
+        const crew=b.crewSize[lane];
+        const visible=Math.min(3,crew);
+        for (let rank=visible-1;rank>=0;rank--) {
+          const spot=lanes[lane]+rank*5;
+          const active=lit && lane===current.lane && rank===current.row%visible;
+          const landing=lane===b.lastLane && rank===b.lastRank%visible && elapsed<.22;
+          let y=-67-rank*15;
+          if (active && b.phase==="attack") {
+            y+=72*Math.pow(Math.max(0,(b.clock/b.beat-.50)*2),2);
+          } else if (landing) y+=72*Math.pow(1-elapsed/.22,2);
+          const kind=landing?"impact":active&&warning?"lock":"rest";
+          magnet(spot,y,s.t+lane,kind,rank?.55:.83);
+          if(active) {
+            ellipse(warning?"#f64c48":"#ffd465",spot,y+1,5,4);
+            ellipse("#fff1c6",spot,y,2,2);
+          }
+        }
+        const x=lanes[lane];
+        rect(lit && current.lane===lane ? (warning?"#a12b32":"#8e681e") : "#263343",x-10,43,20,9);
+        ctx.font="bold 8px monospace";ctx.textAlign="center";ctx.fillStyle="#fff1cc";
+        ctx.fillText(String(lane+1),x,51);
+        if(crew>3){ctx.fillText("×"+crew,x,-92);}
+      }
+    }
     function frame(s){
       if(!back)return;ctx.setTransform(1,0,0,1,0,0);ctx.imageSmoothingEnabled=false;ctx.drawImage(back,0,0);
       ctx.save();const shake=s.reduced?0:s.shake;ctx.translate(Math.round(cx+Math.sin(s.t*91)*shake),Math.round(cy+Math.cos(s.t*83)*shake));ctx.scale(scale,scale);
@@ -102,21 +160,24 @@ const PixelArt = (() => {
       } else {
         ctx.drawImage(wood, -135, -61);
       }
-      const m=s.magnet,active=["track","lock","slam"].includes(m.phase);
+      const m=s.magnet,active=!s.boss && ["track","lock","slam"].includes(m.phase);
       if(active){ellipse(m.phase==="track"?"#ffc24427":"#d734443d",m.x,m.y+1,19,11);ring(m.phase==="track"?"#f9b64c":"#f55d60",m.x,m.y+1,19,11,1.5)}
+      if(s.boss) bossFormation(s);
       s.nails.slice().sort((a,b)=>a.base-b.base).forEach(nail);
       if(active && m.phase!=="track"){
         ctx.save();ctx.translate(m.x,m.y);let k=Math.max(4,16*(1-m.elapsed/.8));ring("#fff2ba",0,0,k,k*.64,1);ctx.restore()}
       const px=s.aim.x,py=s.aim.y;
       const c=s.stun>0?"#fc6660":s.hover?"#efffd6":"#69e7de";ring("#233a3d",px,py,10,5,2);ring(c,px,py,10,5,1);rect(c,px-14,py,6,1);rect(c,px+9,py,6,1);rect(c,px,py-9,1,5);rect(c,px,py+5,1,4);
       let mx=m.phase==="rest"?Math.sin(s.t*.82)*65:m.x;
-      let my=-68+Math.sin(s.t*2)*3;
+      let my=-68+(m.phase==="rest" || m.phase==="track" ? Math.sin(s.t*2)*3 : 0);
       if(m.phase==="slam"){my+=(m.y-15-my)*Math.min(1,m.elapsed/.19)**2}
       if(m.phase==="recover"){my+=(m.y-15-my)*(1-Math.min(1,m.elapsed/.52))**2}
       // The crane stays behind the mallet until its forward lunge.
-      if(m.phase!=="slam"&&m.phase!=="recover")magnet(mx,my,s.t,m.phase);
-      hammer(px,py,s.swing>0?Math.max(0,1-s.swing/.22):0,s.t);
-      if(m.phase==="slam"||m.phase==="recover")magnet(mx,my,s.t,m.phase==="recover"?"impact":"slam");
+      if(!s.boss && m.phase!=="slam"&&m.phase!=="recover")magnet(mx,my,s.t,m.phase);
+      const grip=s.swing>0 && s.stroke ? s.stroke : s.aim;
+      hammer(grip.x,grip.y,s.swing>0?Math.max(0,1-s.swing/.27):0,s.t);
+      if(s.boss?.iframes>0)ring("#ffbd8b",px,py,15,8,1.5);
+      if(!s.boss && (m.phase==="slam"||m.phase==="recover"))magnet(mx,my,s.t,m.phase==="recover"?"impact":"slam");
       for(const p of s.particles)rect(p.color,p.x,p.y,p.size,p.size);
       if(s.pop){ctx.font="bold 9px monospace";ctx.textAlign="center";const yy=s.pop.y-(.75-s.pop.ttl)*12;ctx.fillStyle="#1a2231";ctx.fillText(s.pop.text,s.pop.x+1,yy+1);ctx.fillStyle=s.pop.color;ctx.fillText(s.pop.text,s.pop.x,yy)}
       ctx.restore();

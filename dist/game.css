@@ -13,3 +13,9 @@ dialog{border:1px solid #536076;border-top:4px solid var(--gold);background:#1a2
 #pause{width:44px;height:44px}
 #pause i{width:17px;height:15px}
 @media(max-height:570px) and (orientation:landscape){body.playing .mast,body.playing .foot{display:none}body.playing main{padding:3px 0}body.playing .screen{height:calc(100svh - 102px)}body.playing .readouts{padding:6px 0}body.playing .statusbar{height:25px}}
+
+.startActions{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.startActions .secondary{pointer-events:auto}
+#sequence{position:absolute;left:50%;bottom:48px;transform:translateX(-50%);display:flex;gap:4px;pointer-events:none}
+#sequence span{display:grid;place-items:center;width:24px;height:23px;background:#192231f0;border:1px solid #68727e;color:#c1cad5;font:bold 14px monospace}
+#sequence .current{background:#ffcf68;color:#231c16;border-color:#fff3c6}
+.time>i{font-size:28px}
