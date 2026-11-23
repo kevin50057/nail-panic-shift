@@ -1,32 +1,36 @@
 <!doctype html>
 <html lang="zh-Hant">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><meta name="theme-color" content="#0d1119"><meta name="description" content="限時敲釘，再用三條命挑戰無限電磁連砸。"><title>最後一槌！ NAIL PANIC!｜深夜街機</title><link rel="icon" href="data:,"><link rel="stylesheet" href="./game.css"></head>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="theme-color" content="#0d1119"><meta name="description" content="白天幫老師傅扶釘子，晚上換你掄槌對付電磁怪。白班敲歪的，夜班都得自己收拾。"><title>最後一槌：換班｜深夜街機</title><link rel="icon" href="data:,"><link rel="stylesheet" href="./game.css"></head>
 <body>
 <header class="mast"><div class="width headrow"><div class="brand"><i data-icon="arcade"></i><span>深夜街機<small>MIDNIGHT ARCADE</small></span></div><nav><button id="audio" aria-label="音效" aria-pressed="true"><i data-icon="sound"></i><span>音效開</span></button><button id="help"><i data-icon="pad"></i><span>操作指南</span></button></nav></div></header>
 <main class="width">
-<section class="cabinet" aria-label="最後一槌遊戲機">
-<div class="statusbar"><div class="status"><i></i><span id="sys">待機中</span></div><div class="mode"><span class="signal" aria-hidden="true">▂▄▆</span> <span id="modeText">TIME ATTACK</span></div></div>
+<section class="cabinet" aria-label="最後一槌：換班 遊戲機">
+<div class="statusbar"><div class="status"><i></i><span id="sys">待機中</span></div><div class="mode"><span class="signal" aria-hidden="true">▂▄▆</span> <span id="modeTag">SHIFT CHANGE</span></div></div>
 <div class="screen" id="screen">
+<canvas id="bgDay" class="bg" aria-hidden="true"></canvas><canvas id="bgNight" class="bg" aria-hidden="true"></canvas>
+<canvas id="field" tabindex="0" aria-label="遊戲區。白班拖曳移動扶釘的手；夜班拖曳移槌、放開敲擊，或以方向鍵與空白鍵操作。" hidden></canvas>
+<div id="fx" aria-hidden="true"></div>
+<div id="bubble" aria-hidden="true"></div>
 <div class="home" id="home">
 <div class="keyart"></div><div class="shade"></div><div class="homecopy">
-<div class="tag"><span></span> 夜班敲釘挑戰</div>
+<div class="tag"><span></span> 白班 × 夜班 換班挑戰</div>
 <h1 aria-label="NAIL PANIC!"><span>NAIL</span><b>PANIC!</b></h1>
-<h2>最後一槌！</h2><p>趕在鈴響前敲完六根釘子。<br>帶著三條命，迎戰電磁怪的五連砸。</p>
-<div class="startActions"><button class="primary" id="start"><i data-icon="play"></i>開始遊戲</button><button class="secondary" id="bossStart">直挑魔王</button></div></div>
+<h2>最後一槌：換班</h2><p>白天幫老師傅扶釘子，晚上換你掄槌對付電磁怪。<br>白班敲歪的釘子，夜班都得自己收拾。</p>
+<div class="diff" id="diff" role="group" aria-label="難度"></div><small id="diffNote"></small><button class="primary" id="start"><i data-icon="play"></i>開始上班</button><a class="bossLink" href="./rush/index.html?boss=1">直挑魔王 · 五連砸</a></div>
 </div>
-<canvas id="field" tabindex="0" aria-label="敲釘子遊戲區。按住拖曳移槌，放開敲擊，或以方向鍵與空白鍵操作。" hidden></canvas>
-<div id="livebar" hidden><b id="wave"></b><button id="pause" aria-label="暫停"><i data-icon="pause"></i></button></div>
-<div id="sequence" aria-label="連砸道次" hidden></div>
+<div id="livebar" hidden><b id="wave"><i id="waveIcon" data-icon="sun"></i><span id="waveText"></span></b><div class="liveRight"><span id="lives" aria-label="剩下的 OK 繃"></span><button id="pause" aria-label="暫停"><i data-icon="pause"></i></button></div></div>
 <div id="hint" hidden></div>
 </div>
 <div class="readouts">
-<div class="stat time"><i data-icon="clock"></i><div><span class="statlabel" id="timeLabel">時間限制</span><div class="number"><b id="timer">45</b><small id="timeUnit">秒</small></div></div></div>
-<div class="stat target"><i data-icon="nail"></i><div><span class="statlabel" id="targetLabel">目標釘數</span><div class="number"><b id="count">06</b><small>根</small></div></div></div>
+<div class="stat time"><i data-icon="clock"></i><div><span class="statlabel" id="timeLabel">白班</span><div class="number"><b id="timer">30</b><small>秒</small></div></div></div>
+<div class="stat target"><i data-icon="nail"></i><div><span class="statlabel" id="targetLabel">夜班</span><div class="number"><b id="count">35</b><small id="countUnit">秒</small></div></div></div>
 <div class="stat score"><i data-icon="bolt"></i><div><span class="statlabel">本局得分</span><div class="number"><b id="score">0000</b></div></div></div>
 <div class="stat best"><i data-icon="trophy"></i><div><span class="statlabel">最高紀錄</span><div class="number"><b id="record">0000</b></div></div></div>
 </div></section>
-<div class="foot"><div><i data-icon="pad"></i><span class="desktopGuide"><kbd>↑</kbd><kbd>←</kbd><kbd>↓</kbd><kbd>→</kbd> 移動 <kbd class="sp">Space</kbd> 敲擊</span><span class="mobileGuide">按住拖曳移槌，放開敲擊</span></div><span>紀錄儲存於此裝置</span></div>
+<div class="foot"><div><i data-icon="pad"></i><span class="desktopGuide"><kbd>↑</kbd><kbd>←</kbd><kbd>↓</kbd><kbd>→</kbd> 移手／移槌 <kbd class="sp">Space</kbd> 夜班敲擊</span><span class="mobileGuide">白班拖曳扶釘・夜班拖曳移槌放開敲</span></div><span>紀錄儲存於此裝置</span></div>
 </main>
 <dialog id="dialog"><div class="dialogBody"><div class="dialogTop"><span id="dialogTag">HOW TO PLAY</span><button id="close" aria-label="關閉">×</button></div><h2 id="dialogTitle"></h2><div id="dialogContent"></div><div class="actions" id="dialogActions"></div></div></dialog>
 <div id="announcer" aria-live="polite" class="sr"></div>
-<script src="./art.js"></script><script src="./boss.js"></script><script src="./game.js"></script></body></html>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+<script src="./art.js"></script><script src="./game.js"></script></body></html>
