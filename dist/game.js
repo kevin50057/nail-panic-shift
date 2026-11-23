@@ -1,6 +1,13 @@
 "use strict";
 (() => {
 const $=id=>document.getElementById(id);
+// 這台瀏覽器不能用 WebGL（常見原因：Chrome 的「硬體加速」被關掉）：
+// 換班模式需要 3D，改顯示說明，並導向不需要 3D 的魔王關。
+{const c=document.createElement("canvas");let ok=false;try{ok=!!(window.WebGLRenderingContext&&(c.getContext("webgl2")||c.getContext("webgl")))}catch{}
+ if(!ok||typeof THREE==="undefined"){const h=document.querySelector("#home .homecopy");if(h){const box=document.createElement("div");box.className="noGL";
+   box.innerHTML='<b>這個瀏覽器的 3D 功能（WebGL）沒有開啟</b><p>換班模式需要 3D。Chrome 請到「設定 → 系統」開啟「可用時使用圖形加速」並重開；或換用 Safari。</p><a class="primary noGLgo" href="./rush/index.html?boss=1">先玩不需要 3D 的魔王關</a>';
+   h.querySelector("#start")?.replaceWith(box);h.querySelector(".bossLink")?.remove();const d=$("diff");if(d)d.hidden=true;const n=$("diffNote");if(n)n.hidden=true}
+   for(const i of document.querySelectorAll("[data-icon]"))i.innerHTML=PixelArt.icon(i.dataset.icon);return}}
 const V3=THREE.Vector3,UP=new V3(0,1,0),XA=new V3(1,0,0);
 const rand=(a,b)=>a+Math.random()*(b-a),clamp=(v,a,b)=>Math.max(a,Math.min(b,v)),lerp=(a,b,t)=>a+(b-a)*t;
 const eIn=t=>t*t*t,eOut=t=>1-(1-t)**3,pick=a=>a[Math.floor(Math.random()*a.length)],damp=(r,dt)=>1-Math.exp(-r*dt);
