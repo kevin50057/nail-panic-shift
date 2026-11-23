@@ -58,3 +58,18 @@ body{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;-webki
 .liveRight{gap:6px}
 @media(max-width:700px){#gear{position:absolute;right:0;top:46px;gap:2px}#gear i{width:19px;height:19px;padding:2px}}
 #livebar>b{white-space:nowrap}
+
+/* 排行榜＋分享 */
+.board{margin-top:14px;border-top:1px dashed #4a5468;padding-top:12px;text-align:left}
+.boardHead{display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:8px}.boardHead b{color:#ffd766;font-size:17px}.boardHead span{color:#9aa6b2;font-size:12px}
+.boardName{display:flex;align-items:center;gap:8px;font-size:13px;color:#c1c8d0;margin-bottom:8px}
+.boardName input{flex:1;min-width:0;font:600 16px system-ui;background:#0f1520;color:#fff;border:1px solid #586375;border-radius:3px;padding:8px 10px;-webkit-user-select:text;user-select:text}
+.boardName input:focus{outline:2px solid #ffd766;border-color:#ffd766}
+.boardList{list-style:none;margin:0 0 10px;padding:0;display:grid;gap:3px;max-height:240px;overflow:auto}
+.boardList li{display:grid;grid-template-columns:26px 1fr auto auto;gap:8px;align-items:center;padding:5px 8px;background:#1b2230;border-radius:3px;font-size:14px}
+.boardList li i{font-style:normal;font-weight:800;color:#8fa0b2;text-align:center}.boardList li span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#e8edf1}
+.boardList li small{color:#8a96a3;font-size:11px;white-space:nowrap}.boardList li b{font-variant-numeric:tabular-nums;color:#ffad4c}
+.boardList li.top1 i{color:#ffd766}.boardList li.top2 i{color:#d8e1e8}.boardList li.top3 i{color:#e0a26a}
+.boardList li.me{background:#3a3218;outline:1px solid #ffd766}.boardList li.me span{color:#ffe9a8;font-weight:700}
+.shareBtn{width:100%}.shareOut{margin-top:10px;text-align:center}.shareOut img{width:min(260px,70%);border-radius:4px;-webkit-touch-callout:default;-webkit-user-select:auto;user-select:auto;pointer-events:auto}
+.shareOut p{font-size:12px;color:#9aa6b2;margin:6px 0 0}
