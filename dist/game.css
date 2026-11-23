@@ -42,3 +42,4 @@ dialog{border:1px solid #536076;border-top:4px solid var(--gold);background:#1a2
 .nextmod{border:1px dashed #586375;border-radius:3px;padding:7px 10px}
 #bgNight{transition:opacity 1.8s ease,filter 1.2s ease}.screen.blackout #bgNight{filter:brightness(.28)}
 @media(max-width:550px){.dialogBody{padding:18px}.resultRows div{padding:6px 0}}
+.primary:disabled{opacity:.6;cursor:progress;transform:none}

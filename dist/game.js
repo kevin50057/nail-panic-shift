@@ -61,7 +61,8 @@ const floor=new THREE.Mesh(new THREE.PlaneGeometry(40,40),new THREE.ShadowMateri
 /* --- nails --- */
 const steel=phong(0xb7bfc9,90,0x999999),gold=phong(0xffcf4a,80,0xfff0b0);
 const gShank=new THREE.CylinderGeometry(0.036,0.036,NL,8),gTip=new THREE.ConeGeometry(0.036,0.13,8),gHead=new THREE.CylinderGeometry(0.13,0.115,0.05,16);
-function makeNail(m=steel){const g=new THREE.Group();add(g,gShank,m,[0,NL/2,0]);add(g,gTip,m,[0,-0.065,0],null,[Math.PI,0,0]);add(g,gHead,m,[0,NL+0.025,0]);scene.add(g);return g}
+let nailProto=null;
+function makeNail(m=steel){const g=new THREE.Group();if(nailProto){const c=nailProto.clone();c.traverse(o=>{if(o.isMesh&&o.material.name!=="Outline")o.material=m});g.add(c);scene.add(g);return g}add(g,gShank,m,[0,NL/2,0]);add(g,gTip,m,[0,-0.065,0],null,[Math.PI,0,0]);add(g,gHead,m,[0,NL+0.025,0]);scene.add(g);return g}
 
 /* --- apprentice hand (day) --- */
 const skinA=0xf2c4a0,skinMat=phong(skinA,18,0x333333),sleeveMat=mat(0xd99c2e);
@@ -77,7 +78,9 @@ let fingers=null;
 const swellColor=s=>cA.setHex(skinA).lerp(cB.setHex(0xe0574d),clamp((s-1)/0.8,0,1)).getHex();
 function chain(pts,r,m){const g=new THREE.Group();for(let i=0;i<pts.length-1;i++)seg(g,pts[i],pts[i+1],r,m);pts.forEach(p=>add(g,sph,m,p.toArray(),r));
   const tip=pts[pts.length-1],prev=pts[pts.length-2],d=new V3().subVectors(tip,prev).normalize();add(g,sph,phong(0xf7dcd0,60),[tip.x-d.x*r*0.3,tip.y+r*0.72,tip.z-d.z*r*0.3],[r*0.62,r*0.28,r*0.62]);return g}
-function buildFingers(){if(fingers)hand.remove(fingers);fingers=new THREE.Group();fingers.add(chain(IDX,0.07*G.sw.index,phong(swellColor(G.sw.index),18,0x333333)));fingers.add(chain(THB,0.078*G.sw.thumb,phong(swellColor(G.sw.thumb),18,0x333333)));hand.add(fingers);
+let glbFingers=null;
+function buildFingers(){if(glbFingers){for(const[k,node]of glbFingers){const s=G.sw[k];node.traverse(o=>{if(o.isMesh&&o.morphTargetInfluences)o.morphTargetInfluences[0]=clamp((s-1)/0.85,0,1);if(o.isMesh&&/^Skin/.test(o.material.name))o.material.color.setHex(swellColor(s))})}playerFist.color.setHex(swellColor((G.sw.index+G.sw.thumb)/2));return}
+  if(fingers)hand.remove(fingers);fingers=new THREE.Group();fingers.add(chain(IDX,0.07*G.sw.index,phong(swellColor(G.sw.index),18,0x333333)));fingers.add(chain(THB,0.078*G.sw.thumb,phong(swellColor(G.sw.thumb),18,0x333333)));hand.add(fingers);
   playerFist.color.setHex(swellColor((G.sw.index+G.sw.thumb)/2))}
 
 /* --- the old master --- */
@@ -93,13 +96,13 @@ add(headG,new THREE.TorusGeometry(0.73,0.1,6,24),whiteM,[0,0.3,0],null,[Math.PI/
 const glassM=mat(0x3a2618),rg=new THREE.TorusGeometry(0.17,0.03,5,16),lensM=basic(0xdff3ff,{transparent:true,opacity:0.3});
 [0.24,-0.24].forEach(x=>{add(headG,rg,glassM,[x,0.02,0.69]);add(headG,new THREE.CircleGeometry(0.16,16),lensM,[x,0.02,0.7])});
 add(headG,new THREE.BoxGeometry(0.15,0.03,0.03),glassM,[0,0.05,0.71]);
-const eyes=[0.24,-0.24].map(x=>add(headG,sph,darkM,[x,0.02,0.64],[0.055,0.07,0.04]));
-const brows=[0.25,-0.25].map(x=>add(headG,new THREE.BoxGeometry(0.26,0.06,0.06),hairM,[x,0.24,0.68]));
+let eyes=[0.24,-0.24].map(x=>add(headG,sph,darkM,[x,0.02,0.64],[0.055,0.07,0.04]));
+let brows=[0.25,-0.25].map(x=>add(headG,new THREE.BoxGeometry(0.26,0.06,0.06),hairM,[x,0.24,0.68]));
 add(headG,sph,phong(0xe39a7a,20),[0,-0.14,0.72],[0.13,0.12,0.12]);
 add(headG,sph,hairM,[0.16,-0.3,0.66],[0.2,0.08,0.09],[0,0,-0.3]);add(headG,sph,hairM,[-0.16,-0.3,0.66],[0.2,0.08,0.09],[0,0,0.3]);
-const mouth=add(headG,sph,darkM,[0,-0.44,0.62],[0.09,0.02,0.04]);
-const sweat=add(headG,sph,new THREE.MeshPhongMaterial({color:0x8fd0ff,shininess:90,transparent:true,opacity:0.9}),[0.64,0.32,0.42],[0.07,0.11,0.07]);sweat.visible=false;
-const armSleeve=new THREE.Mesh(cyl,indigo),armSkin=new THREE.Mesh(cyl,skinM);armSleeve.castShadow=armSkin.castShadow=true;scene.add(armSleeve,armSkin);
+let mouth=add(headG,sph,darkM,[0,-0.44,0.62],[0.09,0.02,0.04]);
+let sweat=add(headG,sph,new THREE.MeshPhongMaterial({color:0x8fd0ff,shininess:90,transparent:true,opacity:0.9}),[0.64,0.32,0.42],[0.07,0.11,0.07]);sweat.visible=false;
+let armSleeve=new THREE.Mesh(cyl,indigo),armSkin=new THREE.Mesh(cyl,skinM);armSleeve.castShadow=armSkin.castShadow=true;scene.add(armSleeve,armSkin);
 const SHL=new V3(-0.95,1.0,0.15);
 
 /* --- hammers: the master's, and the one you get at night --- */
@@ -109,7 +112,7 @@ function makeHammer(fist,handle){const h=new THREE.Group();scene.add(h);add(h,sp
   add(h,new THREE.CylinderGeometry(0.2,0.2,0.56,12),steelD,[0,0.03,L]);add(h,new THREE.CylinderGeometry(0.22,0.21,0.06,14),steelF,[0,-0.28,L]);
   add(h,new THREE.BoxGeometry(0.3,0.2,0.3),steelD,[0,0,L]);[0.065,-0.065].forEach(x=>add(h,new THREE.BoxGeometry(0.06,0.32,0.12),steelD,[x,0.43,L-0.07],null,[-0.5,0,0]));return h}
 const hamM=makeHammer(skinM,phong(0xc8874a,25)),hamP=makeHammer(playerFist,phong(0xf3b54f,30));
-const pSleeve=new THREE.Mesh(cyl,skinMat);pSleeve.castShadow=true;scene.add(pSleeve);
+let pSleeve=new THREE.Mesh(cyl,skinMat);pSleeve.castShadow=true;scene.add(pSleeve);
 const YM=0.8,YP=Math.PI+0.55,PS=0.78,FACE=new V3(0,-0.31,L),F0=y=>FACE.clone().applyAxisAngle(XA,A_HIT).applyAxisAngle(UP,y),FM=F0(YM),FP=F0(YP).multiplyScalar(PS);hamP.scale.setScalar(PS);
 function poseHammer(h,f,yaw,T,a,lift){h.position.set(T.x-f.x,T.y-f.y+lift,T.z-f.z);h.rotation.set(a,yaw,0,"YXZ")}
 
@@ -119,7 +122,7 @@ add(magnet,new THREE.TorusGeometry(0.42,0.17,8,18,Math.PI),red,[0,0.1,0]);
 [0.42,-0.42].forEach(x=>{add(magnet,new THREE.BoxGeometry(0.34,0.3,0.34),red,[x,-0.05,0]);add(magnet,new THREE.BoxGeometry(0.36,0.16,0.36),tipM,[x,-0.28,0])});
 add(magnet,new THREE.BoxGeometry(0.1,0.32,0.36),mat(0x992f3b),[0.6,0.12,0]);
 add(magnet,new THREE.BoxGeometry(0.46,0.24,0.08),mat(0x14181f),[0,0.42,0.17]);
-const magEyeM=basic(0x62efe5),magEyes=[0.1,-0.1].map(x=>add(magnet,new THREE.BoxGeometry(0.06,0.11,0.02),magEyeM,[x,0.42,0.215]));
+const magEyeM=basic(0x62efe5);let magEyes=[0.1,-0.1].map(x=>add(magnet,new THREE.BoxGeometry(0.06,0.11,0.02),magEyeM,[x,0.42,0.215]));
 add(magnet,new THREE.BoxGeometry(0.32,0.12,0.24),mat(0x47404b),[0,0.64,0]);[0.08,-0.08].forEach(x=>add(magnet,new THREE.BoxGeometry(0.07,0.04,0.25),basic(0xe9ac49),[x,0.68,0]));
 const linkG=new THREE.TorusGeometry(0.075,0.024,5,8),linkM=mat(0x718090);for(let i=0;i<34;i++)add(magnet,linkG,linkM,[0,0.78+i*0.15,0],null,[0,i%2?Math.PI/2:0,0]);
 magnet.position.set(0,9,-0.8);
@@ -336,7 +339,7 @@ function scoreNight(n,kind){const bait=kind==="bait",pf=kind==="perfect",pts=gai
   pop((bait?"BAIT ":pf?"PERFECT ":"HIT ")+"+"+pts,bait?"cold":pf?"gold":"hit",new V3(n.x,1.3,n.z));
   if(bait){SFX.bait();tip("借力打釘！電磁怪替你敲了一根",1.5)}else if(pf){SFX.nperfect();tip("正中釘心！　連擊 ×"+G.combo,0.85)}else{SFX.nail();tip(n.hp>0?"敲中了！再補一槌":"敲進去了！",0.8)}
   if(N.nails.every(i=>i.hp<=0))nightClear()}
-function magnetImpact(){G.shake=0.27;const at=new V3(M.x,0.05,M.z);burst(at,["cold","cold2"],12,2.6,0.05,0.4,2);
+function magnetImpact(){G.shake=0.27;M.sq=1;const at=new V3(M.x,0.05,M.z);burst(at,["cold","cold2"],12,2.6,0.05,0.4,2);
   const ap=aimPoint();if(Math.hypot(M.x-ap.x,M.z-ap.z)<0.45){N.time=Math.max(0,N.time-4);N.stun=0.48;G.combo=0;SFX.caught();flash(true);pop("CAUGHT -4s","red",new V3(M.x,1.3,M.z));tip("被吸住了！扣四秒",1.45,true);return}
   const hits=N.nails.filter(n=>n.hp>0&&Math.hypot(n.x-M.x,n.z-M.z)<=0.5+0.2*Math.min(2,pk("lure")));if(hits.length){hits.forEach(n=>scoreNight(n,"bait"));if(hits.length>1){const b=gain(100*(hits.length-1));pop(`×${hits.length} BAIT +${b}`,"cold",new V3(M.x,1.9,M.z))}return}
   G.dodges++;SFX.nail();pop("DODGE +"+gain(30),"mint",new V3(M.x,1.3,M.z));tip("閃過了！躲開電磁怪 +30",1)}
@@ -435,7 +438,7 @@ function resize(){const b=screenEl.getBoundingClientRect();if(!b.width||!b.heigh
 new ResizeObserver(()=>{resize();if(mode!=="home")renderer.render(scene,camera)}).observe(screenEl);
 
 /* ================= loop ================= */
-let blink=0;const tmp=new V3();
+let blink=0,mbody=null;const tmp=new V3(),EXP={eye:0.07,brow:0.24,mouth:0.02};
 function step(dt){
   const kx=(keys.has("ArrowRight")?1:0)-(keys.has("ArrowLeft")?1:0),kz=(keys.has("ArrowDown")?1:0)-(keys.has("ArrowUp")?1:0);if(kx||kz){const s=(mode==="night"?2.8:3.2)*dt/Math.hypot(kx,kz);moveBy(kx*s,kz*s)}
   if(dt>0){D.vel.x=lerp(D.vel.x,(D.hand.x-D.prev.x)/dt,damp(10,dt));D.vel.z=lerp(D.vel.z,(D.hand.z-D.prev.z)/dt,damp(10,dt))}D.prev.copy(D.hand);
@@ -457,15 +460,16 @@ function visuals(rdt){const now=performance.now()/1000;
   // master walks off at night
   if(mode==="day")X.masterOut=lerp(X.masterOut,0,damp(2.2,rdt));
   const mo=eOut(X.masterOut),mBase=clamp((mode==="day"?(S.st==="aim"||S.st==="gap"?S.hover.x:S.cur.x):0)*0.35,-0.8,0.8);
-  master.position.x=lerp(master.position.x,mBase+mo*6.5,damp(mode==="day"?3:6,rdt));master.visible=hamM.visible=armSleeve.visible=armSkin.visible=master.position.x<6;
+  const mx0=master.position.x;master.position.x=lerp(master.position.x,mBase+mo*6.5,damp(mode==="day"?3:6,rdt));const walk=clamp(Math.abs(master.position.x-mx0)/Math.max(rdt,1e-3)/3,0,1);
+  master.position.y=lerp(master.position.y,Math.abs(Math.sin(now*11))*0.12*walk,damp(12,rdt));master.rotation.z=Math.sin(now*11)*0.05*walk;if(mbody)mbody.scale.y=1+Math.sin(now*2.1)*0.012;master.visible=hamM.visible=armSleeve.visible=armSkin.visible=master.position.x<6;
   if(mode==="day"&&S.st==="idle")poseHammer(hamM,FM,YM,S.hover,0,1.5);
   master.updateMatrixWorld();const sh=master.localToWorld(SHL.clone()),w=hamM.position,dir=sh.clone().sub(w).normalize(),el=w.clone().addScaledVector(dir,0.5);placeSeg(armSleeve,sh,el,0.21);placeSeg(armSkin,el,w,0.15);
   const tg=S.st==="aim"||S.st==="gap"?S.hover:S.cur;headG.rotation.y=lerp(headG.rotation.y,clamp((tg.x-master.position.x)*0.2,-0.5,0.5)+(X.masterOut>0.05&&mode!=="day"?0.9:0),damp(8,rdt));
   let eye=1,brow=0,hx=-0.3,mouthS=0.02;if(S.st==="aim")eye=0.55;if(S.st==="wind"||S.st==="strike"){eye=0.32;brow=0.3;hx=-0.15}
   if(S.sneeze&&S.st==="wind"&&S.sn>0){eye=0.08;hx=-0.6;mouthS=0.08}if(S.sn===3&&S.st==="strike"){eye=0.1;hx=0.15;mouthS=0.1}if(D.react>0){eye=1.6;brow=-0.3;mouthS=0.07}
   blink-=rdt;if(blink<-3.5-Math.random()*2)blink=0.12;if(blink>0)eye*=0.12;
-  eyes.forEach(e=>e.scale.y=lerp(e.scale.y,0.07*eye,damp(25,rdt)));brows[0].rotation.z=lerp(brows[0].rotation.z,brow,damp(12,rdt));brows[1].rotation.z=-brows[0].rotation.z;
-  brows.forEach(b=>b.position.y=lerp(b.position.y,D.react>0?0.31:0.24,damp(12,rdt)));headG.rotation.x=lerp(headG.rotation.x,hx,damp(10,rdt));mouth.scale.y=lerp(mouth.scale.y,mouthS,damp(15,rdt));sweat.visible=D.react>0;
+  eyes.forEach(e=>e.scale.y=lerp(e.scale.y,EXP.eye*eye,damp(25,rdt)));brows[0].rotation.z=lerp(brows[0].rotation.z,brow,damp(12,rdt));brows[1].rotation.z=-brows[0].rotation.z;
+  brows.forEach(b=>b.position.y=lerp(b.position.y,EXP.brow+(D.react>0?0.07:0),damp(12,rdt)));headG.rotation.x=lerp(headG.rotation.x,hx,damp(10,rdt));mouth.scale.y=lerp(mouth.scale.y,EXP.mouth*mouthS/0.02,damp(15,rdt));sweat.visible=D.react>0;
   // night: your hammer + reticle
   const hi=eOut(X.hamIn);hamP.visible=pSleeve.visible=hi>0.01;
   const night=mode==="night",ap=night?aimPoint():N.aim.clone();
@@ -480,7 +484,7 @@ function visuals(rdt){const now=performance.now()/1000;
     else if(mag==="track"||mag==="lock"){mx=lerp(M.mx,M.x,damp(12,rdt));mz=lerp(M.mz,M.z,damp(12,rdt));my=lerp(M.my,2.3+Math.sin(now*2)*0.05,damp(6,rdt))}
     else{const nn=nearestNail(M.x,M.z),cy=(nn.n&&nn.d<=0.42?headTop(nn.n):0)+0.36;mx=M.x;mz=M.z;my=mag==="slam"?lerp(2.3,cy,eIn(Math.min(1,M.el/0.19))):lerp(cy,2.3,eOut(Math.min(1,M.el/0.52)))}}
   else if(mode==="day"){my=lerp(M.my,9,damp(2,rdt))}
-  M.mx=mx;M.my=my;M.mz=mz;magnet.position.set(mx,my,mz);magnet.visible=my<8.9;magnet.rotation.z=mag==="lock"?Math.sin(now*40)*0.04:Math.sin(now*1.3)*0.05;
+  M.mx=mx;M.my=my;M.mz=mz;magnet.position.set(mx,my,mz);M.sq=Math.max(0,(M.sq||0)-rdt*3.5);{const q=M.sq*Math.cos((1-M.sq)*14);magnet.scale.set(1+0.22*q,1-0.28*q,1+0.22*q)}magnet.visible=my<8.9;magnet.rotation.z=mag==="lock"?Math.sin(now*40)*0.04:Math.sin(now*1.3)*0.05;
   const hotEye=mag==="lock"||mag==="slam";magEyeM.color.setHex(hotEye?0xffbb60:0x62efe5);magEyes.forEach(e=>e.scale.y=mag==="rest"&&Math.floor(now*1.4)%8===0?0.25:1);
   magLight.position.set(mx,my-0.3,mz);magLight.intensity=env*(hotEye?1.4:0.8)*(1+dark);magLight.color.setHex(hotEye?0xffa060:0x62efe5);
   magRing.visible=night&&(mag==="track"||mag==="lock"||mag==="slam");if(magRing.visible){magRing.position.set(M.x,0.025,M.z);magRing.scale.setScalar(1+0.4*Math.min(2,pk("lure")));const tr=mag==="track";magFill.material.color.setHex(tr?0xffc244:0xd73444);magEdge.material.color.setHex(tr?0xf9b64c:0xf55d60);
@@ -498,6 +502,39 @@ function frame(now){if(mode==="home")return;const rdt=Math.min(0.05,(now-last)/1
   renderer.render(scene,camera);if(!paused)raf=requestAnimationFrame(frame)}
 function resume(){cancelAnimationFrame(raf);last=performance.now();raf=requestAnimationFrame(frame)}
 
+/* ================= Blender models (models.glb) ================= */
+const glbMats={};
+function glbMat(m){const nm=m.name;if(glbMats[nm])return glbMats[nm];const c=m.color?m.color.getHex():0xffffff;let n;
+  if(nm==="Outline")n=basic(0x15121a);else if(nm==="Eye")n=magEyeM;else if(nm==="Lens")n=lensM;
+  else if(nm==="StumpTop")n=mat(0xffffff,{map:stumpTop()});else if(nm==="Bark")n=mat(0xffffff,{map:barkTex()});
+  else if(nm==="Sweat")n=new THREE.MeshPhongMaterial({color:c,shininess:90,transparent:true,opacity:0.9});
+  else if(/^Steel|^Chain/.test(nm))n=phong(c,nm==="SteelFace"?130:80,0x999999);
+  else if(nm==="SkinIndex"||nm==="SkinThumb"||nm==="Fingernail"){n=phong(c,18,0x333333);n.morphTargets=true;n.morphNormals=true}
+  else if(/Skin/.test(nm))n=phong(c,15,0x333333);else n=mat(c);
+  n.name=nm;return glbMats[nm]=n}
+function hideKids(g,keep){g.children.forEach(c=>{if(c!==keep)c.visible=false})}
+function useModels(root){
+  root.traverse(o=>{if(o.isMesh){o.material=glbMat(o.material);o.castShadow=o.material.name!=="Outline";o.receiveShadow=o.material.name==="StumpTop"}});
+  const get=n=>{const o=root.getObjectByName(n);if(!o)throw new Error("missing "+n);return o},take=n=>{const o=get(n);o.parent&&o.parent.remove(o);return o};
+  const st=take("Stump");stump.visible=false;scene.add(st);
+  nailProto=take("Nail");nailProto.position.set(0,0,0);
+  const fistM=take("Fist"),hm=take("HammerM"),hp=take("HammerP");
+  hideKids(hamM);hm.position.set(0,0,0);hamM.add(hm);const f1=fistM.clone();f1.position.set(0,0.02,0);hamM.add(f1);
+  hideKids(hamP);hp.position.set(0,0,0);hamP.add(hp);const f2=fistM.clone();f2.position.set(0,0.02,0);f2.traverse(o=>{if(o.isMesh&&o.material.name==="Skin")o.material=playerFist});hamP.add(f2);
+  const ss=take("SegSleeve"),sk=take("SegSkin");
+  for(const[old,proto,set]of[[armSleeve,ss,v=>armSleeve=v],[armSkin,sk,v=>armSkin=v],[pSleeve,sk,v=>pSleeve=v]]){scene.remove(old);const c=proto.clone();scene.add(c);set(c)}
+  hideKids(magnet);const mg=take("Magnet");mg.position.set(0,0,0);magnet.add(mg);magEyes=[mg.getObjectByName("MagEyeA"),mg.getObjectByName("MagEyeB")];
+  const link=take("ChainLink");for(let i=0;i<34;i++){const c=link.clone();c.position.set(0,0.82+i*0.17,0);c.rotation.y=i%2?Math.PI/2:0;magnet.add(c)}
+  hideKids(master,headG);mbody=take("MasterBody");mbody.position.set(0,0,0);master.add(mbody);
+  hideKids(headG);const hd=take("MasterHead");hd.position.set(0,0,0);headG.add(hd);
+  const hg=n=>hd.getObjectByName(n);eyes=[hg("EyeA"),hg("EyeB")];brows=[hg("BrowA"),hg("BrowB")];mouth=hg("Mouth");sweat=hg("Sweat");sweat.visible=false;
+  EXP.eye=1;EXP.brow=brows[0].position.y;EXP.mouth=1;mouth.scale.y=0.02/0.02;
+  hideKids(hand);if(fingers){hand.remove(fingers);fingers=null}const hn=take("Hand");hn.position.set(0,0,0);hand.add(hn);
+  glbFingers=[["index",hn.getObjectByName("Index")],["thumb",hn.getObjectByName("Thumb")]];buildFingers()}
+let modelsReady=!THREE.GLTFLoader;
+function modelsDone(){if(modelsReady)return;modelsReady=true;const b=$("start");b.disabled=false;b.lastChild.textContent="開始上班"}
+if(THREE.GLTFLoader){const b=$("start");b.disabled=true;b.lastChild.textContent="載入模型中…";
+  new THREE.GLTFLoader().load("./models.glb",g=>{try{useModels(g.scene)}catch(e){console.error(e)}modelsDone()},undefined,e=>{console.error(e);modelsDone()});setTimeout(modelsDone,9000)}
 function diffUI(){$("diff").replaceChildren(...DIFFS.map((d,i)=>{const b=document.createElement("button");b.textContent=d.name;b.setAttribute("aria-pressed",String(i===diff));b.onclick=()=>{diff=i;save("nail-shift.diff",String(i));diffUI()};return b}));
   $("diffNote").textContent=`OK 繃 ${DIFFS[diff].lives} 片・夜班 ${NIGHT_T+DIFFS[diff].night} 秒・得分 ×${DIFFS[diff].mult}`;if(mode==="home")$("count").textContent=String(NIGHT_T+DIFFS[diff].night)}
 diffUI();$("record").textContent=String(best).padStart(4,"0");resize();
