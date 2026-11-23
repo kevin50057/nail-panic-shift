@@ -90,6 +90,7 @@ function scoreHit(n,kind){
 }
 const swingTiming = { contact: .08, hold: .018, recovery: .125 };
 function strike(){
+  if(S.boss)return; // 魔王關：師傅拿鐵鎚，你只扶釘子
   if(screenMode!=="play"||S.transition>0||S.stun>0||S.swing>0)return;
   S.swing = swingTiming.contact + swingTiming.hold + swingTiming.recovery;
   const {n,d} = nearest(S.aim.x,S.aim.y);
@@ -97,7 +98,6 @@ function strike(){
 }
 function contact(stroke){
   const {nail:n,distance:d,x,y}=stroke;
-  if (S.boss) { ForgeBoss.strike(stroke); return; }
   if (!n || d>12 || n.hp<=0 || !S.nails.includes(n)) {
     beat.tap(); S.combo=0; popup("MISS",x,y,"#f1b19c");
     return;
@@ -135,7 +135,7 @@ function step(dt){
   if (S.stroke?.pending && S.stroke.duration - S.swing >= swingTiming.contact) { S.stroke.pending=false; contact(S.stroke); }
   if (S.boss) ForgeBoss.step(dt);
   else if(S.transition>0){S.transition-=dt;if(S.transition<=0)loadWave(S.round+1)}else magnetStep(dt);
-  S.hover=S.boss?ForgeBoss.near(S.aim):nearest(S.aim.x,S.aim.y).d<=12;
+  S.hover=S.boss?false:nearest(S.aim.x,S.aim.y).d<=12;
   for(const p of S.particles){p.x+=p.vx*dt;p.y+=p.vy*dt;p.vy+=104*dt;p.life-=dt}
   S.particles=S.particles.filter(p=>p.life>0);if(S.pop){S.pop.ttl-=dt;if(S.pop.ttl<0)S.pop=null}
   if(screenMode==="play"&&!S.boss&&S.time<=0)finish();
@@ -166,7 +166,7 @@ function unfreeze(){closeDialog();screenMode="play";$("sys").textContent="挑戰
 function pause(){if(screenMode!=="play")return;freeze();showDialog("PAUSE","暫停中","<p>按繼續，從剛才的動作接著玩。</p>",[["繼續遊戲",unfreeze,true],["回到主畫面",goHome,false]],"pause")}
 function help(){
   if(screenMode==="play")freeze();const paused=screenMode==="paused";
-  showDialog("HOW TO PLAY","操作指南",'<div class="rule"><i>1</i><div><b>移槌，放開就敲</b><p>在遊戲區任意處按住並滑動，移動準星，放開就敲。電腦也能用方向鍵移動、空白鍵敲擊。</p></div></div><div class="rule"><i>2</i><div><b>對準釘心，少敲一槌</b><p>正中釘心有兩倍敲擊力。45 秒內完成前兩輪六根釘子，即可進入無限魔王關。</p></div></div><div class="rule"><i>3</i><div><b>黃圈誘敵，紅圈閃人</b><p>把追著你的黃圈帶到釘頭。圈變紅、位置固定就移開！怪物會替你打釘，<strong>藍環鎖釘只能靠牠敲入</strong>。被吸到扣四秒。</p></div></div><div class="rule"><i>4</i><div><b>師傅出題，照節奏敲回去</b><p>魔王關有三命。老師傅會依節拍在木樁上畫五個圈、各插一根釘子，音一個比一個高。「嗒、嗒」兩聲後換你：照同樣的順序和節奏把五根釘子敲進去，金圈收到釘頭時敲下。漏拍或敲歪都扣一命，五根全中回復一命。每一題都更快。</p></div></div>',[[paused?"繼續遊戲":"開始遊戲",paused?unfreeze:start,true]],"help");
+  showDialog("HOW TO PLAY","操作指南",'<div class="rule"><i>1</i><div><b>移槌，放開就敲</b><p>在遊戲區任意處按住並滑動，移動準星，放開就敲。電腦也能用方向鍵移動、空白鍵敲擊。</p></div></div><div class="rule"><i>2</i><div><b>對準釘心，少敲一槌</b><p>正中釘心有兩倍敲擊力。45 秒內完成前兩輪六根釘子，即可進入無限魔王關。</p></div></div><div class="rule"><i>3</i><div><b>黃圈誘敵，紅圈閃人</b><p>把追著你的黃圈帶到釘頭。圈變紅、位置固定就移開！怪物會替你打釘，<strong>藍環鎖釘只能靠牠敲入</strong>。被吸到扣四秒。</p></div></div><div class="rule"><i>4</i><div><b>魔王關：師傅拿鎚，你扶釘</b><p>魔王關有三命。老師傅先依節拍在木樁上畫五個圈，音一個比一個高。「嗒、嗒」兩聲後，他會照同樣的節奏一圈一槌敲下去：你要在每一槌落下前把手上的釘子扶進那個圈。扶得準就敲進去；偏一點會敲歪；偏太多會敲到手指（扣一命，手指腫了會抖）；沒扶到也扣一命。五根全中回一命。每一題都更快。</p></div></div>',[[paused?"繼續遊戲":"開始遊戲",paused?unfreeze:start,true]],"help");
 }
 function finish(){
   if(screenMode!=="play")return;

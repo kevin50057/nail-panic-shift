@@ -168,44 +168,69 @@ const PixelArt = (() => {
       const b=s.boss,t=b.time,NH=ForgeBoss.NH;
       ctx.font="bold 8px monospace";ctx.textAlign="center";
       const order=b.marks.filter(m=>m.shown>=0).sort((p,q)=>p.y-q.y);
-      // 先畫粉筆圈（在木頭上），再由後往前畫釘子。
       for(const m of order){
         const draw=Math.min(1,(t-m.shown)/(b.beat*.45));
-        const current=b.phase==="play"&&m.i===b.cur;
-        const done=m.state==="good"||m.state==="perfect",miss=m.state==="miss";
-        const col=done?"#ffd766":miss?"#8a7d78":current?"#ff6d5e":"#e9584e";
-        if(!done&&!miss)ellipse(current?"#ff5d5244":"#ff5d5222",m.x,m.y,11,6.3);
+        const current=(b.phase==="play"||b.phase==="count")&&m.i===b.cur;
+        const done=m.state==="good"||m.state==="perfect",bad=m.state==="miss"||m.state==="bent";
+        const col=done?"#ffd766":bad?"#8a7d78":current?"#ff6d5e":"#e9584e";
+        if(!done&&!bad)ellipse(current?"#ff5d5244":"#ff5d5222",m.x,m.y,11,6.3);
         ctx.strokeStyle="#3a1c1c";ctx.lineWidth=3;ctx.beginPath();ctx.ellipse(m.x,m.y,11,6.3,0,-Math.PI/2,-Math.PI/2+Math.PI*2*draw);ctx.stroke();
         ctx.strokeStyle=col;ctx.lineWidth=1.6;ctx.beginPath();ctx.ellipse(m.x,m.y,11,6.3,0,-Math.PI/2,-Math.PI/2+Math.PI*2*draw);ctx.stroke();
+        if(m.state==="wait"){
+          ctx.fillStyle="#1a2231";ctx.fillText(String(m.i+1),m.x+1,m.y+3);
+          ctx.fillStyle="#fff1cc";ctx.fillText(String(m.i+1),m.x,m.y+2);
+        }
+        if(current&&b.phase==="play"){
+          const k=Math.max(0,Math.min(1,(m.due-t)/b.beat));
+          const r=11+k*22;
+          ring(k<.2?"#fff7c2":"#ffd24a",m.x,m.y,r,r*.573,k<.2?2.2:1.4);
+        }
       }
       for(const m of order){
-        const current=b.phase==="play"&&m.i===b.cur;
-        const done=m.state==="good"||m.state==="perfect",miss=m.state==="miss";
-        const age=t-m.shown-b.beat*.12;           // 圈畫到一半時釘子落下
-        if(age<0)continue;
-        if(miss)bentNail(m.x,m.y);
-        else if(done){
-          // 敲進去的瞬間往下沉
-          const k=Math.min(1,(t-m.judgedAt)/.06);
+        if(m.state==="good"||m.state==="perfect"){
+          const k=Math.min(1,(t-m.judgedAt)/.05);
           nail({x:m.x,base:m.y,y:m.y-NH*(1-k),hp:k<1?1:0,max:1,heavy:m.state==="perfect"});
-        } else {
-          const drop=Math.max(0,1-age/.1);
-          const y=m.y-NH-drop*drop*16;
-          nail({x:m.x,base:m.y,y,hp:1,max:1,heavy:false});
-          if(current)rect("#ffd766",m.x-3,y-2,6,1);
-        }
-        if(!done){
-          const ly=m.y-NH-7;
-          ctx.fillStyle="#1a2231";ctx.fillText(String(m.i+1),m.x-11,ly+1);
-          ctx.fillStyle=miss?"#b9aaa4":"#fff1cc";ctx.fillText(String(m.i+1),m.x-12,ly);
-        }
-        if(current){
-          const k=Math.max(0,Math.min(1,(m.due-t)/b.beat));
-          const r=8+k*22;
-          ring(k<.18?"#fff7c2":"#ffd24a",m.x,m.y-NH,r,r*.573,k<.18?2.2:1.4);
-        }
-        if(m.judgedAt&&t-m.judgedAt<.18){const r=9+(t-m.judgedAt)*80;ring(done?"#fff3c0":"#ff8a7a",m.x,m.y-(done?0:NH*.5),r,r*.573,1)}
+        } else if(m.state==="bent") bentNail(m.nx,m.ny);
+        else if(m.state==="miss"){ellipse("#3b231c99",m.x,m.y,5,2.5);rect("#2a1a16",m.x-2,m.y-1,4,1)}
+        if(m.judgedAt&&t-m.judgedAt<.18){const r=9+(t-m.judgedAt)*80;ring(m.state==="miss"?"#ff8a7a":"#fff3c0",m.x,m.y,r,r*.573,1)}
       }
+    }
+    // 你的手：拇指和食指捏著一根釘子；被敲到會腫、會發紅。
+    function bossHand(s){
+      const b=s.boss,NH=ForgeBoss.NH,p=ForgeBoss.nailPos(b);
+      const x=p.x,y=p.y,sw=b.sw,hot=b.hurt>0;
+      const skin=hot?"#ff9a86":sw>=2?"#f39a84":sw>=1?"#f4a98a":"#f0b48a",shade=hot?"#e0705f":"#d99a72";
+      const hasNail=!(b.slamMark&&t0(b)<.12);
+      ring("#6be7de88",x,y,5,2.9,1);
+      if(hasNail)nail({x,base:y,y:y-NH,hp:1,max:1});
+      ctx.save();ctx.translate(x,y);ctx.scale(1.35,1.35);{const x=0,y=0;
+      // 前臂從右下伸過來
+      poly(OUT,[[x+3,y-11],[x+12,y-12],[x+34,y+20],[x+21,y+27]]);
+      poly(skin,[[x+4,y-10],[x+11,y-11],[x+32,y+19],[x+22,y+25]]);
+      poly(shade,[[x+16,y+4],[x+31,y+18],[x+24,y+23]]);
+      rect("#2f5f9a",x+20,y+14,13,10);rect(OUT,x+19,y+13,1,12);
+      // 拇指（在釘子右側）
+      rect(OUT,x+1,y-10,7,6);rect(skin,x+2,y-9,5,4);rect("#fff0e0",x+2,y-9,2,1);
+      // 食指橫過釘身，腫起來會變粗
+      const th=4+Math.round(sw*1.5);
+      rect(OUT,x-5-sw,y-8-th/2,14+sw,th+2);rect(skin,x-4-sw,y-7-th/2,12+sw,th);
+      rect(shade,x-4-sw,y-7+th/2-2,12+sw,1);rect("#fff0e0",x-3-sw,y-7-th/2,2,1);
+      if(sw>0)rect("#e2504a88",x-3-sw,y-6-th/2+1,4+sw,Math.max(1,th-3));
+      }ctx.restore();
+      if(hot){ctx.fillStyle="#ff6b5c";ctx.font="bold 8px monospace";ctx.fillText("！",x+12,y-14)}
+    }
+    const t0=b=>b.time-b.slamAt;
+    // 師傅的鐵鎚：圖左右翻轉，讓握把朝向師傅。
+    function bossHammer(s){
+      const b=s.boss,NH=ForgeBoss.NH,{pose,lift}=ForgeBoss.hammerPose(b);
+      const hx=b.hx,hy=b.hy-NH-lift;
+      ctx.save();ctx.translate(hx,0);ctx.scale(-1,1);hammer(0,hy,pose);ctx.restore();
+      const sx=b.mx+14*1.3,sy=b.my-22*1.3,ex=hx-36,ey=hy-34+(pose>=5?8:0);
+      ctx.lineCap="round";
+      ctx.strokeStyle=OUT;ctx.lineWidth=7;ctx.beginPath();ctx.moveTo(sx,sy);ctx.lineTo(ex,ey);ctx.stroke();
+      ctx.strokeStyle="#2f5f9a";ctx.lineWidth=5;ctx.beginPath();ctx.moveTo(sx,sy);ctx.lineTo(ex,ey);ctx.stroke();
+      ctx.lineCap="butt";
+      ellipse(OUT,ex,ey,4.2,4.2);ellipse("#f0b48a",ex,ey,3.2,3.2);
     }
     function frame(s){
       if(!back)return;ctx.setTransform(1,0,0,1,0,0);ctx.imageSmoothingEnabled=false;ctx.drawImage(back,0,0);
@@ -219,12 +244,12 @@ const PixelArt = (() => {
       }
       const m=s.magnet,active=!s.boss && ["track","lock","slam"].includes(m.phase);
       if(active){ellipse(m.phase==="track"?"#ffc24427":"#d734443d",m.x,m.y+1,19,11);ring(m.phase==="track"?"#f9b64c":"#f55d60",m.x,m.y+1,19,11,1.5)}
-      if(s.boss){bossMarks(s);masterArm(s.boss)}
+      if(s.boss){bossMarks(s);bossHand(s);if(s.boss.phase==="enter"||s.boss.phase==="call")masterArm(s.boss);else bossHammer(s)}
       s.nails.slice().sort((a,b)=>a.base-b.base).forEach(nail);
       if(active && m.phase!=="track"){
         ctx.save();ctx.translate(m.x,m.y);let k=Math.max(4,16*(1-m.elapsed/.8));ring("#fff2ba",0,0,k,k*.64,1);ctx.restore()}
       const px=s.aim.x,py=s.aim.y;
-      const c=s.stun>0?"#fc6660":s.hover?"#efffd6":"#69e7de";ring("#233a3d",px,py,10,5,2);ring(c,px,py,10,5,1);rect(c,px-14,py,6,1);rect(c,px+9,py,6,1);rect(c,px,py-9,1,5);rect(c,px,py+5,1,4);
+      const c=s.stun>0?"#fc6660":s.hover?"#efffd6":"#69e7de";if(!s.boss){ring("#233a3d",px,py,10,5,2);ring(c,px,py,10,5,1);rect(c,px-14,py,6,1);rect(c,px+9,py,6,1);rect(c,px,py-9,1,5);rect(c,px,py+5,1,4);}
       let mx=m.phase==="rest"?Math.sin(s.t*.82)*65:m.x;
       let my=-68+(m.phase==="rest" || m.phase==="track" ? Math.sin(s.t*2)*3 : 0);
       if(m.phase==="slam"){my+=(m.y-15-my)*Math.min(1,m.elapsed/.19)**2}
@@ -239,8 +264,7 @@ const PixelArt = (() => {
         if (elapsed < swingTiming.contact) pose = Math.floor(5 * elapsed / swingTiming.contact);
         else pose = rebound <= 0 ? 5 : Math.min(8,6 + Math.floor(3 * rebound / swingTiming.recovery));
       }
-      hammer(grip.x,grip.y,pose);
-      if(s.boss?.iframes>0)ring("#ffbd8b",px,py,15,8,1.5);
+      if(!s.boss)hammer(grip.x,grip.y,pose);
       if(!s.boss && (m.phase==="slam"||m.phase==="recover"))magnet(mx,my,s.t,m.phase==="recover"?"impact":"slam");
       for(const p of s.particles)rect(p.color,p.x,p.y,p.size,p.size);
       if(s.pop){ctx.font="bold 9px monospace";ctx.textAlign="center";const yy=s.pop.y-(.75-s.pop.ttl)*12;ctx.fillStyle="#1a2231";ctx.fillText(s.pop.text,s.pop.x+1,yy+1);ctx.fillStyle=s.pop.color;ctx.fillText(s.pop.text,s.pop.x,yy)}
