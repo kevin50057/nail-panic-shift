@@ -7,6 +7,7 @@ const ForgeBoss = (() => {
   const ANSWER_AT = 8;                      // 出題後第 8 拍開始作答
   const WIN = .13, PERFECT = .06, REACH = 13;
   const BASE = 392;                         // G4，之後每波升半音
+  const NH = 11;                            // 立著的釘子高度：瞄準釘頭
 
   const dist = (ax, ay, bx, by) => Math.hypot(ax - bx, (ay - by) * 1.25);
   const note = (b, i) => BASE * Math.pow(2, (SCALE[i] + Math.min(b.wave - 1, 12)) / 12);
@@ -62,11 +63,11 @@ const ForgeBoss = (() => {
     $("timeLabel").textContent = "剩餘生命";
     $("timeUnit").textContent = "命";
     document.querySelector(".time > i").textContent = "♥";
-    $("targetLabel").textContent = "命中圈圈";
-    document.querySelector(".target small").textContent = "個";
+    $("targetLabel").textContent = "敲入釘子";
+    document.querySelector(".target small").textContent = "根";
     $("modeText").textContent = "BOSS RUSH";
     newVolley(b);
-    announce("魔王關：老師傅會畫五個圈，記住順序和節奏，再照著敲回去。");
+    announce("魔王關：老師傅會畫五個圈、插五根釘子，記住順序和節奏，再照著敲進去。");
   }
 
   function judge(b, m, grade, delta) {
@@ -76,7 +77,8 @@ const ForgeBoss = (() => {
     if (grade === "miss") {
       S.combo = 0; b.mood = "angry";
       b.lives--; b.iframes = .5;
-      popup(delta === "early" ? "太早！" : delta === "off" ? "偏了！" : "漏拍！", m.x, m.y, "#ff846f");
+      popup(delta === "off" ? "敲歪了！" : "漏拍！", m.x, m.y - NH, "#ff846f");
+      sparks(m.x, m.y - 4, ["#9aa7ad","#d8e1e3","#6b7780"]);
       tone(150, .22, "sawtooth", .06, 0, 70);
       S.shake = 2;
       if (!b.lives) { finish(); return; }
@@ -87,7 +89,7 @@ const ForgeBoss = (() => {
       const pts = (perfect ? 220 : 120) + Math.min(S.combo - 1, 10) * 15;
       S.points += pts;
       S.shake = perfect ? 2.6 : 1.5;
-      sparks(m.x, m.y, hotColors);
+      sparks(m.x, m.y - 2, hotColors);
       popup((perfect ? "PERFECT +" : "GOOD +") + pts, m.x, m.y, perfect ? "#fff2a8" : "#ffdb76");
       tone(150, .07, "triangle", .15, 0, 50);
       tone(f, .24, "triangle", .13, .005);
@@ -119,14 +121,14 @@ const ForgeBoss = (() => {
       popup("還沒到", stroke.x, stroke.y, "#f1b19c");
       return;
     }
-    const d = dist(stroke.x, stroke.y, m.x, m.y);
+    const d = dist(stroke.x, stroke.y, m.x, m.y - NH);
     if (d > REACH) { judge(b, m, "miss", "off"); return; }
     judge(b, m, Math.abs(dt) <= PERFECT && d <= 6.5 ? "perfect" : "good", dt);
   }
 
   function near(aim) {
     const b = S.boss, m = b?.marks?.[b.cur];
-    return !!m && b.phase === "play" && dist(aim.x, aim.y, m.x, m.y) <= REACH;
+    return !!m && b.phase === "play" && dist(aim.x, aim.y, m.x, m.y - NH) <= REACH;
   }
 
   function step(dt) {
@@ -145,6 +147,7 @@ const ForgeBoss = (() => {
         tone(f, .16, "square", .045);
         tone(f * 2, .09, "sine", .03, .01);
         tone(2400, .025, "square", .012);      // 粉筆擦過木頭
+        tone(1900, .05, "triangle", .03, .1, 1400); // 釘子插上去
         b.called++;
       }
       if (b.called === 5 && b.phase === "call") b.phase = "count";
@@ -181,10 +184,10 @@ const ForgeBoss = (() => {
   }
 
   function hint(b) {
-    if (b.phase === "enter") return b.wave === 1 ? "老師傅來出題了！看好他畫的圈" : "下一題，速度加快！";
+    if (b.phase === "enter") return b.wave === 1 ? "老師傅來出題了！看他插釘子的順序" : "下一題，速度加快！";
     if (b.phase === "call") return "記住順序和節奏　" + b.called + " / 5";
     if (b.phase === "count") return b.ticks < 1 ? "預備——" : "嗒、嗒，換你！";
-    if (b.phase === "play") return "照節奏敲圈圈！　" + Math.min(5, b.cur + 1) + " / 5";
+    if (b.phase === "play") return "照節奏敲釘子！　" + Math.min(5, b.cur + 1) + " / 5";
     return b.hits === 5 ? "全中！師傅點頭了" : "這題中 " + b.hits + " / 5";
   }
 
@@ -203,5 +206,5 @@ const ForgeBoss = (() => {
     }));
   }
 
-  return {enter, step, strike, near, hint, showSequence, rimY, note};
+  return {enter, step, strike, near, hint, showSequence, rimY, note, NH};
 })();

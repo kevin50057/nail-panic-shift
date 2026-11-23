@@ -157,31 +157,54 @@ const PixelArt = (() => {
       ellipse(OUT,hx,hy,4,4);ellipse("#f0b48a",hx,hy,3,3);
       rect(OUT,b.tipX-2,b.tipY-3,4,4);rect("#ff5d52",b.tipX-1.5,b.tipY-2.5,3,3);
     }
+    // 歪掉的釘子（跟白班敲歪一樣）：釘身斜倒，釘頭偏到一邊。
+    function bentNail(x,y){
+      ellipse("#65422d78",x+4,y+1,8,3);
+      ctx.strokeStyle="#3a3e46";ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x+2,y-5);ctx.lineTo(x+9,y-8);ctx.stroke();
+      ctx.strokeStyle="#aebcc0";ctx.lineWidth=1.4;ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x+2,y-5);ctx.lineTo(x+9,y-8);ctx.stroke();
+      ctx.save();ctx.translate(x+10,y-8);ctx.rotate(-.9);ellipse("#424851",0,1,6,2.6);ellipse("#bfced0",0,-.5,6,2.2);ctx.restore();
+    }
     function bossMarks(s){
-      const b=s.boss,t=b.time;
+      const b=s.boss,t=b.time,NH=ForgeBoss.NH;
       ctx.font="bold 8px monospace";ctx.textAlign="center";
-      for(const m of b.marks){
-        if(m.shown<0)continue;
+      const order=b.marks.filter(m=>m.shown>=0).sort((p,q)=>p.y-q.y);
+      // 先畫粉筆圈（在木頭上），再由後往前畫釘子。
+      for(const m of order){
         const draw=Math.min(1,(t-m.shown)/(b.beat*.45));
         const current=b.phase==="play"&&m.i===b.cur;
         const done=m.state==="good"||m.state==="perfect",miss=m.state==="miss";
-        let col=done?"#ffd766":miss?"#8a7d78":current?"#ff6d5e":"#e9584e";
-        if(!done&&!miss){ellipse(current?"#ff5d5244":"#ff5d5222",m.x,m.y,11,6.3)}
+        const col=done?"#ffd766":miss?"#8a7d78":current?"#ff6d5e":"#e9584e";
+        if(!done&&!miss)ellipse(current?"#ff5d5244":"#ff5d5222",m.x,m.y,11,6.3);
         ctx.strokeStyle="#3a1c1c";ctx.lineWidth=3;ctx.beginPath();ctx.ellipse(m.x,m.y,11,6.3,0,-Math.PI/2,-Math.PI/2+Math.PI*2*draw);ctx.stroke();
         ctx.strokeStyle=col;ctx.lineWidth=1.6;ctx.beginPath();ctx.ellipse(m.x,m.y,11,6.3,0,-Math.PI/2,-Math.PI/2+Math.PI*2*draw);ctx.stroke();
-        if(!done){
-          ctx.fillStyle="#1a2231";ctx.fillText(String(m.i+1),m.x-12,m.y-6);
-          ctx.fillStyle=miss?"#b9aaa4":"#fff1cc";ctx.fillText(String(m.i+1),m.x-13,m.y-7);
+      }
+      for(const m of order){
+        const current=b.phase==="play"&&m.i===b.cur;
+        const done=m.state==="good"||m.state==="perfect",miss=m.state==="miss";
+        const age=t-m.shown-b.beat*.12;           // 圈畫到一半時釘子落下
+        if(age<0)continue;
+        if(miss)bentNail(m.x,m.y);
+        else if(done){
+          // 敲進去的瞬間往下沉
+          const k=Math.min(1,(t-m.judgedAt)/.06);
+          nail({x:m.x,base:m.y,y:m.y-NH*(1-k),hp:k<1?1:0,max:1,heavy:m.state==="perfect"});
+        } else {
+          const drop=Math.max(0,1-age/.1);
+          const y=m.y-NH-drop*drop*16;
+          nail({x:m.x,base:m.y,y,hp:1,max:1,heavy:false});
+          if(current)rect("#ffd766",m.x-3,y-2,6,1);
         }
-        if(done)nail({x:m.x,y:m.y,base:m.y,hp:0,heavy:true});
-        if(miss){ctx.strokeStyle="#ff6b5c";ctx.lineWidth=1.6;ctx.beginPath();ctx.moveTo(m.x-5,m.y-4);ctx.lineTo(m.x+5,m.y+4);ctx.moveTo(m.x+5,m.y-4);ctx.lineTo(m.x-5,m.y+4);ctx.stroke()}
+        if(!done){
+          const ly=m.y-NH-7;
+          ctx.fillStyle="#1a2231";ctx.fillText(String(m.i+1),m.x-11,ly+1);
+          ctx.fillStyle=miss?"#b9aaa4":"#fff1cc";ctx.fillText(String(m.i+1),m.x-12,ly);
+        }
         if(current){
           const k=Math.max(0,Math.min(1,(m.due-t)/b.beat));
-          const r=11+k*22;
-          ring(k<.18?"#fff7c2":"#ffd24a",m.x,m.y,r,r*.573,k<.18?2.2:1.4);
+          const r=8+k*22;
+          ring(k<.18?"#fff7c2":"#ffd24a",m.x,m.y-NH,r,r*.573,k<.18?2.2:1.4);
         }
-        // 剛被判定時閃一下
-        if(m.judgedAt&&t-m.judgedAt<.18){const r=11+(t-m.judgedAt)*80;ring(done?"#fff3c0":"#ff8a7a",m.x,m.y,r,r*.573,1)}
+        if(m.judgedAt&&t-m.judgedAt<.18){const r=9+(t-m.judgedAt)*80;ring(done?"#fff3c0":"#ff8a7a",m.x,m.y-(done?0:NH*.5),r,r*.573,1)}
       }
     }
     function frame(s){
