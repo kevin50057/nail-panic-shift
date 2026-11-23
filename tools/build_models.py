@@ -2,6 +2,7 @@
 
 Run with Blender's Python module (pip install bpy) or inside Blender:
     python3 tools/build_models.py dist/models.glb
+    python3 tools/build_models.py models.gltf   # single JSON file, for hosts that only serve .json
     blender -b -P tools/build_models.py -- dist/models.glb
 
 Everything is authored in three.js coordinates (Y up, +Z toward the camera)
@@ -14,7 +15,7 @@ import bpy, bmesh, addon_utils
 from mathutils import Vector as V, Matrix
 
 random.seed(7)
-OUT = sys.argv[-1] if sys.argv[-1].endswith(".glb") else "models.glb"
+OUT = sys.argv[-1] if sys.argv[-1].endswith((".glb", ".gltf")) else "models.glb"
 bpy.ops.wm.read_factory_settings(use_empty=True)
 addon_utils.enable("io_scene_gltf2", default_set=True)
 RX = Matrix.Rotation(math.radians(90), 4, "X")  # three (x,y,z) -> blender (x,-z,y)
@@ -317,6 +318,13 @@ def finger(name, pts, r, m):
 finger("Index", IDX, 0.07, "SkinIndex")
 finger("Thumb", THB, 0.078, "SkinThumb")
 
-bpy.ops.export_scene.gltf(filepath=OUT, export_format="GLB", export_yup=True, export_apply=False, export_morph=True,
+GLB = OUT if OUT.endswith(".glb") else OUT[:-5] + ".tmp.glb"
+bpy.ops.export_scene.gltf(filepath=GLB, export_format="GLB", export_yup=True, export_apply=False, export_morph=True,
                           export_morph_normal=True, export_materials="EXPORT", use_selection=False, export_animations=False)
+if GLB != OUT:  # glTF with the binary buffer inlined as base64: one plain JSON file
+    import json, struct, base64, os
+    raw = open(GLB, "rb").read(); n = struct.unpack_from("<I", raw, 12)[0]
+    doc = json.loads(raw[20:20 + n]); binl = struct.unpack_from("<I", raw, 20 + n)[0]
+    doc["buffers"][0]["uri"] = "data:application/octet-stream;base64," + base64.b64encode(raw[28 + n:28 + n + binl]).decode()
+    json.dump(doc, open(OUT, "w"), separators=(",", ":")); os.remove(GLB)
 print("exported", OUT)

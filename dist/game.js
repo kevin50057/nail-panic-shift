@@ -534,7 +534,8 @@ function useModels(root){
 let modelsReady=!THREE.GLTFLoader;
 function modelsDone(){if(modelsReady)return;modelsReady=true;const b=$("start");b.disabled=false;b.lastChild.textContent="開始上班"}
 if(THREE.GLTFLoader){const b=$("start");b.disabled=true;b.lastChild.textContent="載入模型中…";
-  new THREE.GLTFLoader().load("./models.glb",g=>{try{useModels(g.scene)}catch(e){console.error(e)}modelsDone()},undefined,e=>{console.error(e);modelsDone()});setTimeout(modelsDone,9000)}
+  const ld=new THREE.GLTFLoader(),ok=g=>{try{useModels(g.scene)}catch(e){console.error(e)}modelsDone()};
+  ld.load("./models.glb",ok,undefined,()=>ld.load("./models.json",ok,undefined,e=>{console.error(e);modelsDone()}));setTimeout(modelsDone,9000)}
 function diffUI(){$("diff").replaceChildren(...DIFFS.map((d,i)=>{const b=document.createElement("button");b.textContent=d.name;b.setAttribute("aria-pressed",String(i===diff));b.onclick=()=>{diff=i;save("nail-shift.diff",String(i));diffUI()};return b}));
   $("diffNote").textContent=`OK 繃 ${DIFFS[diff].lives} 片・夜班 ${NIGHT_T+DIFFS[diff].night} 秒・得分 ×${DIFFS[diff].mult}`;if(mode==="home")$("count").textContent=String(NIGHT_T+DIFFS[diff].night)}
 diffUI();$("record").textContent=String(best).padStart(4,"0");resize();
