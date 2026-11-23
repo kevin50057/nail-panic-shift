@@ -111,48 +111,83 @@ const PixelArt = (() => {
       poly("#afbfc2",[[-10,-10],[-4,-13],[6,-11],[3,-8],[-7,-7]]);poly("#72868e",[[-9,-6],[-6,-7],[-7,8],[-10,5]]);
       poly("#d4e2d9",[[-10,6],[5,9],[6,12],[1,13],[-10,10]]);rect("#d0a04b",-1,-7,4,4);ctx.restore();
     }
-    function bossFormation(s) {
-      const b=s.boss, lanes=ForgeBoss.centers, current=b.order[b.index];
-      const warning=b.phase==="attack" || b.phase==="hold";
-      const lit=warning || b.phase==="preview";
-      const elapsed=b.time-b.impactTime;
-      ctx.save();
-      ctx.beginPath();ctx.ellipse(0,0,123,50,0,0,Math.PI*2);ctx.clip();
-      for(let i=0;i<lanes.length;i++) {
-        const left=lanes[i]-23;
-        if (lit && current.lane===i) rect(warning?"#ee434c99":"#ffcf546b",left,-52,46,104);
-        if (i===b.lastLane && elapsed<.14) rect("#fff2be88",left,-52,46,104);
-        if (i>0) rect("#452b2588",left,-50,1,100);
-      }
+    const OUT="#1b1621";
+    // 老師傅（正面）：藍工作服、皮圍裙、頭巾、眼鏡、八字鬍。腰部以下藏在木樁後面。
+    function masterBody(b,t){
+      ctx.save();ctx.translate(b.mx,b.my-(b.bob>0?Math.sin(b.bob/.18*Math.PI)*2:0));ctx.scale(1.3,1.3);
+      poly(OUT,[[-17,4],[-16,-22],[-11,-27],[11,-27],[16,-22],[17,4]]);
+      poly("#2f5f9a",[[-15,4],[-14,-21],[-10,-25],[10,-25],[14,-21],[15,4]]);
+      rect("#4a7fc0",-12,-22,4,25);
+      poly("#e9e2cf",[[-5,-25],[0,-19],[5,-25]]);
+      rect(OUT,-9,-17,18,21);rect("#8a5a36",-8,-16,16,20);rect("#a8713f",-7,-15,3,18);
+      rect("#6b4428",-8,-25,2,9);rect("#6b4428",6,-25,2,9);
+      rect("#6b4428",-6,-9,7,6);rect("#f2c94c",-5,-13,2,5);rect("#e46a5a",-5,-14,2,1);
+      rect(OUT,-20,-23,6,21);rect("#2f5f9a",-19,-22,4,16);rect("#f0b48a",-19,-6,4,3);
+      rect("#d99a72",-3,-29,6,3);
+      rect(OUT,-11,-47,22,20);rect("#f0b48a",-10,-46,20,18);rect("#ffd0a8",-9,-45,6,4);
+      rect("#e2a07a",-12,-40,2,5);rect("#e2a07a",10,-40,2,5);
+      rect(OUT,-12,-51,24,8);rect("#2b3f73",-11,-50,22,6);rect("#3f5a9c",-9,-50,10,2);
+      rect("#e8ecf3",-6,-47,1,1);rect("#e8ecf3",2,-48,1,1);rect("#e8ecf3",7,-46,1,1);
+      const f=Math.sin(t*6)*1.5;poly("#2b3f73",[[10,-48],[18,-46+f],[19,-41+f],[12,-44]]);
+      rect(OUT,-9,-42,8,6);rect(OUT,1,-42,8,6);rect("#bfe6f2",-8,-41,6,4);rect("#bfe6f2",2,-41,6,4);rect(OUT,-1,-40,2,1);
+      const blink=(t*1.3)%5<.12;
+      if(blink){rect(OUT,-6,-39,3,1);rect(OUT,4,-39,3,1)}else{rect(OUT,-6,-40,2,3);rect(OUT,4,-40,2,3)}
+      if(b.mood==="angry"){poly(OUT,[[-9,-46],[-2,-44],[-2,-43],[-9,-45]]);poly(OUT,[[9,-46],[2,-44],[2,-43],[9,-45]])}
+      else if(b.mood==="happy"){rect(OUT,-8,-46,6,1);rect(OUT,2,-46,6,1)}
+      rect("#e98a7a",-9,-35,3,2);rect("#e98a7a",6,-35,3,2);
+      rect("#4a4146",-6,-34,12,3);rect("#4a4146",-8,-33,3,2);rect("#4a4146",5,-33,3,2);
+      if(b.mood==="happy"){rect("#7a2e2e",-3,-31,6,1);rect("#7a2e2e",-4,-32,1,1);rect("#7a2e2e",3,-32,1,1)}
+      else if(b.mood==="angry"){rect("#7a2e2e",-3,-30,6,1);rect("#7a2e2e",-4,-29,1,1);rect("#7a2e2e",3,-29,1,1)}
+      else if(b.phase==="call"){rect("#7a2e2e",-2,-31,4,2)}
+      else rect("#7a2e2e",-2,-30,4,1);
       ctx.restore();
-      for(let lane=0;lane<lanes.length;lane++) {
-        const crew=b.crewSize[lane];
-        const visible=Math.min(3,crew);
-        for (let rank=visible-1;rank>=0;rank--) {
-          const spot=lanes[lane]+rank*5;
-          const active=lit && lane===current.lane && rank===current.row%visible;
-          const landing=lane===b.lastLane && rank===b.lastRank%visible && elapsed<.22;
-          let y=-67-rank*15;
-          if (active && b.phase==="attack") {
-            y+=72*Math.pow(Math.max(0,(b.clock/b.beat-.50)*2),2);
-          } else if (landing) y+=72*Math.pow(1-elapsed/.22,2);
-          const kind=landing?"impact":active&&warning?"lock":"rest";
-          magnet(spot,y,s.t+lane,kind,rank?.55:.83);
-          if(active) {
-            ellipse(warning?"#f64c48":"#ffd465",spot,y+1,5,4);
-            ellipse("#fff1c6",spot,y,2,2);
-          }
+    }
+    // 右手與粉筆棍：畫在木樁前面，棍尖點在要畫圈的位置。
+    function masterArm(b){
+      const sx=b.mx+14*1.3,sy=b.my-22*1.3;
+      let dx=b.tipX-sx,dy=b.tipY-sy;const len=Math.hypot(dx,dy)||1;
+      const reach=Math.min(18,len*.45),hx=sx+dx/len*reach,hy=sy+dy/len*reach;
+      ctx.lineCap="round";
+      ctx.strokeStyle=OUT;ctx.lineWidth=7;ctx.beginPath();ctx.moveTo(sx,sy);ctx.lineTo(hx,hy);ctx.stroke();
+      ctx.strokeStyle="#2f5f9a";ctx.lineWidth=5;ctx.beginPath();ctx.moveTo(sx,sy);ctx.lineTo(hx,hy);ctx.stroke();
+      ctx.strokeStyle=OUT;ctx.lineWidth=3.4;ctx.beginPath();ctx.moveTo(hx,hy);ctx.lineTo(b.tipX,b.tipY);ctx.stroke();
+      ctx.strokeStyle="#9a6236";ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(hx,hy);ctx.lineTo(b.tipX,b.tipY);ctx.stroke();
+      ctx.strokeStyle="#d9a066";ctx.lineWidth=.8;ctx.beginPath();ctx.moveTo(hx,hy);ctx.lineTo(b.tipX,b.tipY);ctx.stroke();
+      ctx.lineCap="butt";
+      ellipse(OUT,hx,hy,4,4);ellipse("#f0b48a",hx,hy,3,3);
+      rect(OUT,b.tipX-2,b.tipY-3,4,4);rect("#ff5d52",b.tipX-1.5,b.tipY-2.5,3,3);
+    }
+    function bossMarks(s){
+      const b=s.boss,t=b.time;
+      ctx.font="bold 8px monospace";ctx.textAlign="center";
+      for(const m of b.marks){
+        if(m.shown<0)continue;
+        const draw=Math.min(1,(t-m.shown)/(b.beat*.45));
+        const current=b.phase==="play"&&m.i===b.cur;
+        const done=m.state==="good"||m.state==="perfect",miss=m.state==="miss";
+        let col=done?"#ffd766":miss?"#8a7d78":current?"#ff6d5e":"#e9584e";
+        if(!done&&!miss){ellipse(current?"#ff5d5244":"#ff5d5222",m.x,m.y,11,6.3)}
+        ctx.strokeStyle="#3a1c1c";ctx.lineWidth=3;ctx.beginPath();ctx.ellipse(m.x,m.y,11,6.3,0,-Math.PI/2,-Math.PI/2+Math.PI*2*draw);ctx.stroke();
+        ctx.strokeStyle=col;ctx.lineWidth=1.6;ctx.beginPath();ctx.ellipse(m.x,m.y,11,6.3,0,-Math.PI/2,-Math.PI/2+Math.PI*2*draw);ctx.stroke();
+        if(!done){
+          ctx.fillStyle="#1a2231";ctx.fillText(String(m.i+1),m.x-12,m.y-6);
+          ctx.fillStyle=miss?"#b9aaa4":"#fff1cc";ctx.fillText(String(m.i+1),m.x-13,m.y-7);
         }
-        const x=lanes[lane];
-        rect(lit && current.lane===lane ? (warning?"#a12b32":"#8e681e") : "#263343",x-10,43,20,9);
-        ctx.font="bold 8px monospace";ctx.textAlign="center";ctx.fillStyle="#fff1cc";
-        ctx.fillText(String(lane+1),x,51);
-        if(crew>3){ctx.fillText("×"+crew,x,-92);}
+        if(done)nail({x:m.x,y:m.y,base:m.y,hp:0,heavy:true});
+        if(miss){ctx.strokeStyle="#ff6b5c";ctx.lineWidth=1.6;ctx.beginPath();ctx.moveTo(m.x-5,m.y-4);ctx.lineTo(m.x+5,m.y+4);ctx.moveTo(m.x+5,m.y-4);ctx.lineTo(m.x-5,m.y+4);ctx.stroke()}
+        if(current){
+          const k=Math.max(0,Math.min(1,(m.due-t)/b.beat));
+          const r=11+k*22;
+          ring(k<.18?"#fff7c2":"#ffd24a",m.x,m.y,r,r*.573,k<.18?2.2:1.4);
+        }
+        // 剛被判定時閃一下
+        if(m.judgedAt&&t-m.judgedAt<.18){const r=11+(t-m.judgedAt)*80;ring(done?"#fff3c0":"#ff8a7a",m.x,m.y,r,r*.573,1)}
       }
     }
     function frame(s){
       if(!back)return;ctx.setTransform(1,0,0,1,0,0);ctx.imageSmoothingEnabled=false;ctx.drawImage(back,0,0);
       ctx.save();const shake=s.reduced?0:s.shake;ctx.translate(Math.round(cx+Math.sin(s.t*91)*shake),Math.round(cy+Math.cos(s.t*83)*shake));ctx.scale(scale,scale);
+      if (s.boss) masterBody(s.boss,s.t);
       if (stump.complete && stump.naturalWidth) {
         ellipse("#0c1421b8", 0, 61, 122, 22);
         ctx.drawImage(stump, -130, -53, 260, 139);
@@ -161,13 +196,7 @@ const PixelArt = (() => {
       }
       const m=s.magnet,active=!s.boss && ["track","lock","slam"].includes(m.phase);
       if(active){ellipse(m.phase==="track"?"#ffc24427":"#d734443d",m.x,m.y+1,19,11);ring(m.phase==="track"?"#f9b64c":"#f55d60",m.x,m.y+1,19,11,1.5)}
-      if(s.boss) bossFormation(s);
-      if (s.boss?.phase === "counter" && !s.boss.counter) {
-        const n = s.nails[0];
-        const untilBeat = Math.max(0, 1 - 2*s.boss.clock/s.boss.beat);
-        const radius = 10 + 19*untilBeat;
-        ring("#fff099",n.x,n.y,radius,radius*.57,2);
-      }
+      if(s.boss){bossMarks(s);masterArm(s.boss)}
       s.nails.slice().sort((a,b)=>a.base-b.base).forEach(nail);
       if(active && m.phase!=="track"){
         ctx.save();ctx.translate(m.x,m.y);let k=Math.max(4,16*(1-m.elapsed/.8));ring("#fff2ba",0,0,k,k*.64,1);ctx.restore()}

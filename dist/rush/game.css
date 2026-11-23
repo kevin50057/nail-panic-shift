@@ -21,3 +21,4 @@ dialog{border:1px solid #536076;border-top:4px solid var(--gold);background:#1a2
 .time>i{font-size:28px}
 
 .shiftLink{color:var(--aqua);font-size:14px}
+#sequence .ok{background:#2f6f55;color:#d8ffe9;border-color:#7fe0b0}#sequence .bad{background:#7a2a2e;color:#ffd6d0;border-color:#ff8a7a}

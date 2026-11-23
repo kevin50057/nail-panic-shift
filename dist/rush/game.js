@@ -50,7 +50,7 @@ function resetRun(){
 function start(bossOnly=false){
   closeDialog();unlock();resetRun();screenMode="play";document.body.classList.add("playing");
   $("home").hidden=true;$("field").hidden=false;$("livebar").hidden=false;$("hint").hidden=false;
-  $("sys").textContent="挑戰中";$("timeLabel").textContent="剩餘時間";$("targetLabel").textContent="已敲入";
+  $("sys").textContent="挑戰中";$("timeLabel").textContent="剩餘時間";$("targetLabel").textContent="已敲入";document.querySelector(".target small").textContent="根";
   $("timeUnit").textContent="秒";$("modeText").textContent="TIME ATTACK";
   document.querySelector(".time > i").innerHTML=PixelArt.icon("clock");
   if (bossOnly === true) loadWave(2);
@@ -59,7 +59,7 @@ function start(bossOnly=false){
 function goHome(){
   closeDialog();$("sequence").hidden=true;screenMode="home";cancelAnimationFrame(raf);document.body.classList.remove("playing","danger");
   $("home").hidden=false;$("field").hidden=true;$("livebar").hidden=true;$("hint").hidden=true;
-  $("sys").textContent="待機中";$("timeLabel").textContent="時間限制";$("targetLabel").textContent="目標釘數";
+  $("sys").textContent="待機中";$("timeLabel").textContent="時間限制";$("targetLabel").textContent="目標釘數";document.querySelector(".target small").textContent="根";
   document.querySelector(".time > i").innerHTML=PixelArt.icon("clock");
   $("timer").textContent="45";$("timeUnit").textContent="秒";$("modeText").textContent="TIME ATTACK";$("count").textContent="06";$("score").textContent="0000";$("start").focus({preventScroll:true})
 }
@@ -88,17 +88,15 @@ function strike(){
   if(screenMode!=="play"||S.transition>0||S.stun>0||S.swing>0)return;
   S.swing = swingTiming.contact + swingTiming.hold + swingTiming.recovery;
   const {n,d} = nearest(S.aim.x,S.aim.y);
-  S.stroke = {x:S.aim.x, y:S.aim.y, nail:n, distance:d, pending:true, hold:swingTiming.hold, duration:S.swing};
+  S.stroke = {x:S.aim.x, y:S.aim.y, nail:n, distance:d, pending:true, hold:swingTiming.hold, duration:S.swing, t0:S.boss?S.boss.time:0};
 }
 function contact(stroke){
   const {nail:n,distance:d,x,y}=stroke;
+  if (S.boss) { ForgeBoss.strike(stroke); return; }
   if (!n || d>12 || n.hp<=0 || !S.nails.includes(n)) {
-    if (!S.boss || S.boss.phase==="counter") {
-      beat.tap(); S.combo=0; popup("MISS",x,y,"#f1b19c");
-    }
+    beat.tap(); S.combo=0; popup("MISS",x,y,"#f1b19c");
     return;
   }
-  if (S.boss) { ForgeBoss.counterHit(n,d); return; }
   if(n.shield){tone(165,.09,"square");sparks(n.x,n.y,coldColors);tip("鎖釘！停在藍環，紅圈定住就閃",1.4,true);return}
   scoreHit(n,d<=5.8?"perfect":"hit");
 }
@@ -127,12 +125,12 @@ function step(dt){
     S.lastTick=left;
   }
   const dx=(keys.has("ArrowRight")?1:0)-(keys.has("ArrowLeft")?1:0),dy=(keys.has("ArrowDown")?1:0)-(keys.has("ArrowUp")?1:0);
-  if((dx||dy)&&S.stun<=0){const factor=106*dt/Math.hypot(dx,dy);move(dx*factor,dy*factor*.82)}
+  if((dx||dy)&&S.stun<=0){const factor=(S.boss?190:106)*dt/Math.hypot(dx,dy);move(dx*factor,dy*factor*.82)}
   S.swing=Math.max(0,S.swing-dt);S.stun=Math.max(0,S.stun-dt);S.shake=Math.max(0,S.shake-dt*9);S.tipTime=Math.max(0,S.tipTime-dt);
   if (S.stroke?.pending && S.stroke.duration - S.swing >= swingTiming.contact) { S.stroke.pending=false; contact(S.stroke); }
   if (S.boss) ForgeBoss.step(dt);
   else if(S.transition>0){S.transition-=dt;if(S.transition<=0)loadWave(S.round+1)}else magnetStep(dt);
-  S.hover=nearest(S.aim.x,S.aim.y).d<=12;
+  S.hover=S.boss?ForgeBoss.near(S.aim):nearest(S.aim.x,S.aim.y).d<=12;
   for(const p of S.particles){p.x+=p.vx*dt;p.y+=p.vy*dt;p.vy+=104*dt;p.life-=dt}
   S.particles=S.particles.filter(p=>p.life>0);if(S.pop){S.pop.ttl-=dt;if(S.pop.ttl<0)S.pop=null}
   if(screenMode==="play"&&!S.boss&&S.time<=0)finish();
@@ -163,7 +161,7 @@ function unfreeze(){closeDialog();screenMode="play";$("sys").textContent="挑戰
 function pause(){if(screenMode!=="play")return;freeze();showDialog("PAUSE","暫停中","<p>按繼續，從剛才的動作接著玩。</p>",[["繼續遊戲",unfreeze,true],["回到主畫面",goHome,false]],"pause")}
 function help(){
   if(screenMode==="play")freeze();const paused=screenMode==="paused";
-  showDialog("HOW TO PLAY","操作指南",'<div class="rule"><i>1</i><div><b>移槌，放開就敲</b><p>在遊戲區任意處按住並滑動，移動準星，放開就敲。電腦也能用方向鍵移動、空白鍵敲擊。</p></div></div><div class="rule"><i>2</i><div><b>對準釘心，少敲一槌</b><p>正中釘心有兩倍敲擊力。45 秒內完成前兩輪六根釘子，即可進入無限魔王關。</p></div></div><div class="rule"><i>3</i><div><b>黃圈誘敵，紅圈閃人</b><p>把追著你的黃圈帶到釘頭。圈變紅、位置固定就移開！怪物會替你打釘，<strong>藍環鎖釘只能靠牠敲入</strong>。被吸到扣四秒。</p></div></div><div class="rule"><i>4</i><div><b>五連砸，找空檔反擊</b><p>魔王關有三命。看磁怪亮燈的順序，左右閃開紅道。最後一砸較重，半拍後金釘亮起。接下一拍敲中可加 150 分，每三根回復一命，最多三命。存活越久，敵人越多。</p></div></div>',[[paused?"繼續遊戲":"開始遊戲",paused?unfreeze:start,true]],"help");
+  showDialog("HOW TO PLAY","操作指南",'<div class="rule"><i>1</i><div><b>移槌，放開就敲</b><p>在遊戲區任意處按住並滑動，移動準星，放開就敲。電腦也能用方向鍵移動、空白鍵敲擊。</p></div></div><div class="rule"><i>2</i><div><b>對準釘心，少敲一槌</b><p>正中釘心有兩倍敲擊力。45 秒內完成前兩輪六根釘子，即可進入無限魔王關。</p></div></div><div class="rule"><i>3</i><div><b>黃圈誘敵，紅圈閃人</b><p>把追著你的黃圈帶到釘頭。圈變紅、位置固定就移開！怪物會替你打釘，<strong>藍環鎖釘只能靠牠敲入</strong>。被吸到扣四秒。</p></div></div><div class="rule"><i>4</i><div><b>師傅出題，照節奏敲回去</b><p>魔王關有三命。老師傅會依節拍在木樁上畫五個圈，音一個比一個高。「嗒、嗒」兩聲後換你：照同樣的順序和節奏敲那五個圈，金圈收到圈上時敲下。漏拍、偏掉都扣一命，五個全中回復一命。每一題都更快。</p></div></div>',[[paused?"繼續遊戲":"開始遊戲",paused?unfreeze:start,true]],"help");
 }
 function finish(){
   if(screenMode!=="play")return;
@@ -173,8 +171,8 @@ function finish(){
   const boss=S.boss;
   renderUI();art.frame(S);$("sys").textContent=boss?"挑戰結束":"時間到";$("hint").hidden=true;beat.catch();
   const row=(label,value)=>'<div><span>'+label+'</span><b>'+value+'</b></div>';
-  const results=boss ? row("抵達波次",boss.wave)+row("存活時間",Math.floor(boss.time)+" 秒")+row("反擊金釘",boss.blocks+" 根") : row("熱身釘數",S.cleared+" / 6");
-  const summary='<div class="resultScore">'+S.points+'</div><p>'+(high?"本機最高分更新！":boss?"磁怪收隊，下次再戰。":"下班鈴響了。")+'</p><div class="resultRows">'+results+row("正中釘心",S.perfect+" 槌")+'</div>';
+  const results=boss ? row("抵達波次",boss.wave)+row("存活時間",Math.floor(boss.time)+" 秒")+row("命中圈圈",boss.blocks+" 個") : row("熱身釘數",S.cleared+" / 6");
+  const summary='<div class="resultScore">'+S.points+'</div><p>'+(high?"本機最高分更新！":boss?"師傅搖搖頭：節奏再練練。":"下班鈴響了。")+'</p><div class="resultRows">'+results+row("正中釘心",S.perfect+" 槌")+'</div>';
   showDialog(boss?"BOSS RUSH":"TIME UP",boss?"最後一命用完了":"收工時間到！",summary,[[boss?"再戰魔王":"再玩一局",()=>start(Boolean(boss)),true],["主畫面",goHome,false]],"result");
 }
 function dismiss(){if(modal==="result")goHome();else if(screenMode==="paused")unfreeze();else closeDialog()}

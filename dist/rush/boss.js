@@ -1,146 +1,207 @@
 "use strict";
-// Five lanes always fit on the stump. Later crews queue several cranes per lane.
+// 師傅出題：老師傅在木樁上依節拍畫五個圈（音一個比一個高），
+// 兩聲預備拍後，玩家照同樣的節奏與順序把五個圈敲回去。
 const ForgeBoss = (() => {
-  const centers = [-92, -46, 0, 46, 92];
-  function laneAt(x) {
-    return Math.max(0, Math.min(4, Math.round((x + 92) / 46)));
+  const SCALE = [0, 2, 4, 7, 12];           // 大調五聲：一路往上爬
+  const PATTERNS = [[0,1,2,3,4],[0,1,2,4,5],[0,2,3,4,5],[0,1,3,4,5],[0,1,2,3,5]];
+  const ANSWER_AT = 8;                      // 出題後第 8 拍開始作答
+  const WIN = .13, PERFECT = .06, REACH = 13;
+  const BASE = 392;                         // G4，之後每波升半音
+
+  const dist = (ax, ay, bx, by) => Math.hypot(ax - bx, (ay - by) * 1.25);
+  const note = (b, i) => BASE * Math.pow(2, (SCALE[i] + Math.min(b.wave - 1, 12)) / 12);
+  // 木樁頂面邊緣：師傅的身體藏在這條線後面。
+  const rimY = x => -3 - 47 * Math.sqrt(Math.max(0, 1 - (x / 122) ** 2));
+
+  function place(b) {
+    const spread = Math.min(1, (b.wave - 1) / 6);
+    const dMin = 26 + spread * 8, dMax = 44 + spread * 26;
+    for (let tries = 0; tries < 400; tries++) {
+      const pts = [];
+      let x = (Math.random() - .5) * 60, y = (Math.random() - .5) * 24;
+      pts.push({x, y});
+      let ok = true;
+      for (let i = 1; i < 5 && ok; i++) {
+        let placed = false;
+        for (let k = 0; k < 60; k++) {
+          const a = Math.random() * Math.PI * 2, r = dMin + Math.random() * (dMax - dMin);
+          const nx = x + Math.cos(a) * r, ny = y + Math.sin(a) * r / 1.25;
+          if ((nx / 96) ** 2 + ((ny + 2) / 33) ** 2 > 1) continue;
+          if (pts.some(p => dist(p.x, p.y, nx, ny) < 24)) continue;
+          pts.push({x: nx, y: ny}); x = nx; y = ny; placed = true; break;
+        }
+        ok = placed;
+      }
+      if (ok) return pts;
+    }
+    return [[-60,0],[-30,-14],[0,4],[30,-12],[60,6]].map(([x, y]) => ({x, y}));
   }
+
   function newVolley(b) {
     b.wave++;
-    const count = Math.max(4 + b.wave, 5 + Math.floor(b.time / 15));
-    b.order = [];
-    b.crewSize = Array(5).fill(0);
-    while (b.order.length < count) {
-      const lanes = [0, 1, 2, 3, 4];
-      for (let i = lanes.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [lanes[i], lanes[j]] = [lanes[j], lanes[i]];
-      }
-      if (b.order.length && b.order.at(-1).lane === lanes[0]) {
-        [lanes[0], lanes[1]] = [lanes[1], lanes[0]];
-      }
-      const row = Math.floor(b.order.length / 5);
-      for (const lane of lanes.slice(0, count - b.order.length)) {
-        b.order.push({lane, row});
-        b.crewSize[lane]++;
-      }
-    }
-    b.phase = "ready";
-    b.clock = 0;
-    b.index = 0;
-    b.beat = Math.max(.38, .68 - (b.wave - 1) * .028);
-    b.counter = false;
-    b.onBeat = false;
+    b.beat = Math.max(.28, .42 - (b.wave - 1) * .018);
+    const pattern = b.wave < 3 ? PATTERNS[0] : PATTERNS[Math.floor(Math.random() * PATTERNS.length)];
+    const enter = b.wave === 1 ? 1.25 : .55;
+    b.t0 = b.time + enter;
+    b.answerAt = b.t0 + ANSWER_AT * b.beat;
+    b.marks = place(b).map((p, i) => ({
+      x: p.x, y: p.y, i,
+      callAt: b.t0 + pattern[i] * b.beat,
+      due: b.answerAt + pattern[i] * b.beat,
+      shown: -1, state: "wait", judgedAt: 0
+    }));
+    b.called = 0; b.ticks = 0; b.cur = 0; b.hits = 0; b.perfects = 0;
+    b.phase = "enter"; b.resultAt = 0; b.mood = "calm";
     S.nails = [];
-    $("wave").textContent = "魔王第 " + b.wave + " 波　" + count + " 隻";
+    $("wave").textContent = "魔王第 " + b.wave + " 波　♩=" + Math.round(60 / b.beat);
   }
+
   function enter() {
-    const b = S.boss = {lives:3, wave:0, time:0, blocks:0, iframes:0};
-    S.transition = 0;
-    S.stun = S.swing = 0;
-    S.stroke = null;
-    S.aim = {x:0,y:8};
+    const b = S.boss = {lives:3, wave:0, time:0, blocks:0, iframes:0, mx:-200, tipX:-150, tipY:-30, bob:0};
+    S.transition = 0; S.stun = S.swing = 0; S.stroke = null; S.aim = {x:0, y:4};
     $("timeLabel").textContent = "剩餘生命";
     $("timeUnit").textContent = "命";
     document.querySelector(".time > i").textContent = "♥";
-    $("targetLabel").textContent = "反擊金釘";
+    $("targetLabel").textContent = "命中圈圈";
+    document.querySelector(".target small").textContent = "個";
     $("modeText").textContent = "BOSS RUSH";
     newVolley(b);
-    announce("魔王關，三條命。看燈記順序，移開亮紅的直道。");
+    announce("魔王關：老師傅會畫五個圈，記住順序和節奏，再照著敲回去。");
   }
-  function counterHit(n, distance) {
+
+  function judge(b, m, grade, delta) {
+    m.state = grade; m.judgedAt = b.time;
+    b.cur++;
+    const f = note(b, m.i);
+    if (grade === "miss") {
+      S.combo = 0; b.mood = "angry";
+      b.lives--; b.iframes = .5;
+      popup(delta === "early" ? "太早！" : delta === "off" ? "偏了！" : "漏拍！", m.x, m.y, "#ff846f");
+      tone(150, .22, "sawtooth", .06, 0, 70);
+      S.shake = 2;
+      if (!b.lives) { finish(); return; }
+    } else {
+      const perfect = grade === "perfect";
+      b.hits++; b.blocks++; if (perfect) { b.perfects++; S.perfect++; }
+      S.combo++; S.bestCombo = Math.max(S.bestCombo, S.combo);
+      const pts = (perfect ? 220 : 120) + Math.min(S.combo - 1, 10) * 15;
+      S.points += pts;
+      S.shake = perfect ? 2.6 : 1.5;
+      sparks(m.x, m.y, hotColors);
+      popup((perfect ? "PERFECT +" : "GOOD +") + pts, m.x, m.y, perfect ? "#fff2a8" : "#ffdb76");
+      tone(150, .07, "triangle", .15, 0, 50);
+      tone(f, .24, "triangle", .13, .005);
+      tone(f * 2, .18, "sine", .05, .015);
+      if (perfect) tone(f * 3, .12, "sine", .03, .03);
+      b.bob = .18;
+    }
+    if (b.cur === 5) {
+      b.phase = "result"; b.resultAt = b.time;
+      if (b.hits === 5) {
+        S.points += 300;
+        const healed = b.lives < 3; b.lives = Math.min(3, b.lives + 1);
+        b.mood = "happy";
+        popup(healed ? "全中！+1 命" : "全中！+300", 0, -20, "#9dfcf5");
+        [1, 1.25, 1.5, 2].forEach((k, i) => tone(note(b, 0) * k, .16, "square", .035, .08 + i * .07));
+      }
+    }
+  }
+
+  // 玩家揮槌接觸木頭的瞬間呼叫；用放開那一刻判定，手感較準。
+  function strike(stroke) {
     const b = S.boss;
-    if (b.phase !== "counter" || b.counter || n.hp <= 0) return;
-    b.counter = true;
-    b.blocks++;
-    S.combo++;
-    S.bestCombo = Math.max(S.bestCombo, S.combo);
-    n.hp = 0;
-    n.y = n.base;
-    const perfect = distance <= 5.8;
-    if (perfect) S.perfect++;
-    // The nail appears half a beat after the last impact. Its ring closes on the next beat.
-    b.onBeat = Math.abs(b.clock - b.beat/2) <= .115;
-    const points = (perfect ? 300 : 180) + (b.onBeat ? 150 : 0);
-    S.points += points;
-    const extraHold = b.onBeat ? .055 : .025;
-    S.stroke.hold += extraHold;
-    S.stroke.duration += extraHold;
-    S.swing += extraHold;
-    S.shake = b.onBeat ? 3 : 1.4;
-    if (b.blocks % 3 === 0) b.lives = Math.min(3,b.lives+1);
-    sparks(n.x,n.y,hotColors);
-    popup((b.onBeat ? "ON BEAT +" : "ECHO +")+points,n.x,n.y,"#ffdb76");
-    tone(210,.07,"triangle",.18,0,55);
-    tone(1180,.23,"sine",.09,.022,920);
-    if (b.onBeat) tone(1870,.35,"sine",.055,.03,1570);
+    if (b.phase !== "play") { beat.tap(); return; }
+    const m = b.marks[b.cur];
+    const at = (stroke.t0 ?? b.time) + .03;
+    const dt = at - m.due;
+    if (dt < -WIN) {
+      beat.tap(); S.combo = 0;
+      popup("還沒到", stroke.x, stroke.y, "#f1b19c");
+      return;
+    }
+    const d = dist(stroke.x, stroke.y, m.x, m.y);
+    if (d > REACH) { judge(b, m, "miss", "off"); return; }
+    judge(b, m, Math.abs(dt) <= PERFECT && d <= 6.5 ? "perfect" : "good", dt);
   }
+
+  function near(aim) {
+    const b = S.boss, m = b?.marks?.[b.cur];
+    return !!m && b.phase === "play" && dist(aim.x, aim.y, m.x, m.y) <= REACH;
+  }
+
   function step(dt) {
     const b = S.boss;
     b.time += dt;
-    b.clock += dt;
-    b.iframes = Math.max(0,b.iframes-dt);
-    const duration = {ready:1.3, preview:b.beat, hold:b.beat, attack:b.beat, rest:b.beat/2, counter:2.4}[b.phase];
-    if (b.clock < duration) return;
-    b.clock -= duration;
-    const enemy = b.order[b.index];
-    if (b.phase === "ready") b.phase = "preview";
-    else if (b.phase === "preview") {
-      if (++b.index === Math.min(5,b.order.length)) { b.index = 0; b.phase = "hold"; }
-    } else if (b.phase === "hold") b.phase = "attack";
-    else if (b.phase === "attack") {
-      const x = centers[enemy.lane];
-      b.lastLane = enemy.lane;
-      b.lastRank = enemy.row;
-      b.impactTime = b.time;
-      const finalHit = b.index === b.order.length-1;
-      S.shake = finalHit ? 4 : 2.3;
-      sparks(x,12,hotColors);
-      tone(155 + enemy.lane * 19,.15,"triangle",.18,0,40);
-      tone(finalHit ? 82 : 58,finalHit ? .155 : .105,"sine",finalHit ? .32 : .2,0,31);
-      if (finalHit) tone(285,.065,"sawtooth",.055,0,67);
-      if (laneAt(S.aim.x) === enemy.lane && !b.iframes) {
-        b.lives--;
-        b.iframes = .85;
-        S.combo = 0;
-        popup("−1",S.aim.x,S.aim.y,"#ff846f");
-        if (!b.lives) { finish(); return; }
-      } else if (laneAt(S.aim.x) !== enemy.lane) S.points += 20;
-      if (++b.index === b.order.length) {
-        b.index--;
-        b.phase = "rest";
+    b.iframes = Math.max(0, b.iframes - dt);
+    b.bob = Math.max(0, b.bob - dt);
+    const t = b.time;
+
+    if (b.phase === "enter" && t >= b.t0 - .02) b.phase = "call";
+    if (b.phase === "call" || b.phase === "count") {
+      while (b.called < 5 && t >= b.marks[b.called].callAt) {
+        const m = b.marks[b.called];
+        m.shown = m.callAt;
+        const f = note(b, b.called);
+        tone(f, .16, "square", .045);
+        tone(f * 2, .09, "sine", .03, .01);
+        tone(2400, .025, "square", .012);      // 粉筆擦過木頭
+        b.called++;
       }
-    } else if (b.phase === "rest") {
-      b.phase = "counter";
-      S.nails = [{x:centers[enemy.lane],base:16,y:4,hp:1,max:1,heavy:true}];
-    } else newVolley(b);
-    if (b.phase === "preview") tone(390 + b.order[b.index].lane * 90,.08,"sine",.08);
+      if (b.called === 5 && b.phase === "call") b.phase = "count";
+      while (b.ticks < 2 && t >= b.answerAt - (2 - b.ticks) * b.beat) {
+        tone(b.ticks ? 1560 : 1320, .04, "square", .045);
+        b.ticks++;
+      }
+      if (t >= b.answerAt - WIN) b.phase = "play";
+    }
+    if (b.phase === "play") {
+      const m = b.marks[b.cur];
+      if (m && t > m.due + WIN) judge(b, m, "miss", "late");
+    }
+    if (b.phase === "result" && t - b.resultAt >= .9 + b.beat) newVolley(b);
+
+    // 師傅的走位與粉筆棍
+    let goal = -86, tipX = b.mx + 34, tipY = rimY(b.mx + 34) + 10;
+    if (b.phase === "enter") goal = -70;
+    if (b.phase === "call") {
+      const m = b.marks[Math.min(b.called, 4)];
+      const prev = b.marks[Math.max(0, b.called - 1)];
+      const next = b.called < 5 && t > m.callAt - b.beat * .55 ? m : prev;
+      goal = Math.max(-80, Math.min(66, next.x * .7 - 14));
+      tipX = next.x; tipY = next.y;
+    } else if (b.phase === "count") {
+      const last = b.marks[4];
+      if (t - last.callAt < b.beat * .5) { tipX = last.x; tipY = last.y; goal = Math.max(-80, Math.min(66, last.x * .7 - 14)); }
+    }
+    const k = 1 - Math.exp(-dt * (b.phase === "call" ? 16 : 6));
+    b.mx += (goal - b.mx) * k;
+    b.tipX += (tipX - b.tipX) * (1 - Math.exp(-dt * 22));
+    b.tipY += (tipY - b.tipY) * (1 - Math.exp(-dt * 22));
+    b.my = rimY(b.mx) + 5;
   }
+
   function hint(b) {
-    if (b.phase === "ready") return "三命生存 · 左右移槌閃開紅色直道";
-    if (b.phase === "preview") return "跟著亮燈數五拍　" + (b.index+1) + " / 5";
-    if (b.phase === "hold") return "準備連砸！留意木樁上的紅色直道";
-    if (b.phase === "attack") return "閃開第 " + (b.order[b.index].lane+1) + " 道　" + (b.index+1) + " / " + b.order.length;
-    if (b.phase === "rest") return "停半拍…";
-    if (b.onBeat) return "接上了！節拍獎勵 +150";
-    return b.counter ? "反擊成功 · 每三根金釘補一命" : "輪到你！金圈收緊時敲下";
+    if (b.phase === "enter") return b.wave === 1 ? "老師傅來出題了！看好他畫的圈" : "下一題，速度加快！";
+    if (b.phase === "call") return "記住順序和節奏　" + b.called + " / 5";
+    if (b.phase === "count") return b.ticks < 1 ? "預備——" : "嗒、嗒，換你！";
+    if (b.phase === "play") return "照節奏敲圈圈！　" + Math.min(5, b.cur + 1) + " / 5";
+    return b.hits === 5 ? "全中！師傅點頭了" : "這題中 " + b.hits + " / 5";
   }
+
   function showSequence(b) {
     const panel = $("sequence");
-    const key = [b.wave,b.phase,b.index].join("/");
-    if (panel.dataset.step === key && panel.dataset.run === String(b.order[0].lane)) return;
+    const key = [b.wave, b.phase, b.called, b.cur].join("/");
+    if (panel.dataset.step === key) return;
     panel.dataset.step = key;
-    panel.dataset.run = String(b.order[0].lane);
-    const start = Math.max(0, Math.min(b.index-2,b.order.length-7));
-    const beats = b.order.slice(start,start+7).map((enemy,i) => {
+    panel.replaceChildren(...b.marks.map((m, i) => {
       const cell = document.createElement("span");
-      const position = start+i;
-      const hidden = b.phase==="ready" || (b.phase==="preview" && position>b.index);
-      cell.textContent = hidden ? "·" : String(enemy.lane+1);
-      cell.classList.toggle("current", position===b.index && !hidden);
+      cell.textContent = m.state === "miss" ? "✕" : m.state !== "wait" ? "✓" : i < b.called ? String(i + 1) : "·";
+      cell.classList.toggle("current", b.phase === "play" && i === b.cur);
+      cell.classList.toggle("ok", m.state === "good" || m.state === "perfect");
+      cell.classList.toggle("bad", m.state === "miss");
       return cell;
-    });
-    panel.replaceChildren(...beats);
+    }));
   }
-  return {centers,laneAt,enter,step,counterHit,hint,showSequence};
+
+  return {enter, step, strike, near, hint, showSequence, rimY, note};
 })();
