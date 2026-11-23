@@ -83,11 +83,12 @@ function scoreHit(n,kind){
   else{beat.nail();tip("敲中了！再補一槌",.8)}
   if(S.nails.every(i=>i.hp===0)){S.transition=1;tip("這塊木樁完成了！",1);beat.bell()}
 }
+const swingTiming = { contact: .08, hold: .018, recovery: .125 };
 function strike(){
   if(screenMode!=="play"||S.transition>0||S.stun>0||S.swing>0)return;
-  S.swing = .27;
+  S.swing = swingTiming.contact + swingTiming.hold + swingTiming.recovery;
   const {n,d} = nearest(S.aim.x,S.aim.y);
-  S.stroke = {x:S.aim.x, y:S.aim.y, nail:n, distance:d, pending:true};
+  S.stroke = {x:S.aim.x, y:S.aim.y, nail:n, distance:d, pending:true, hold:swingTiming.hold, duration:S.swing};
 }
 function contact(stroke){
   const {nail:n,distance:d,x,y}=stroke;
@@ -128,7 +129,7 @@ function step(dt){
   const dx=(keys.has("ArrowRight")?1:0)-(keys.has("ArrowLeft")?1:0),dy=(keys.has("ArrowDown")?1:0)-(keys.has("ArrowUp")?1:0);
   if((dx||dy)&&S.stun<=0){const factor=106*dt/Math.hypot(dx,dy);move(dx*factor,dy*factor*.82)}
   S.swing=Math.max(0,S.swing-dt);S.stun=Math.max(0,S.stun-dt);S.shake=Math.max(0,S.shake-dt*9);S.tipTime=Math.max(0,S.tipTime-dt);
-  if (S.stroke?.pending && S.swing <= .12) { S.stroke.pending=false; contact(S.stroke); }
+  if (S.stroke?.pending && S.stroke.duration - S.swing >= swingTiming.contact) { S.stroke.pending=false; contact(S.stroke); }
   if (S.boss) ForgeBoss.step(dt);
   else if(S.transition>0){S.transition-=dt;if(S.transition<=0)loadWave(S.round+1)}else magnetStep(dt);
   S.hover=nearest(S.aim.x,S.aim.y).d<=12;
@@ -162,7 +163,7 @@ function unfreeze(){closeDialog();screenMode="play";$("sys").textContent="挑戰
 function pause(){if(screenMode!=="play")return;freeze();showDialog("PAUSE","暫停中","<p>按繼續，從剛才的動作接著玩。</p>",[["繼續遊戲",unfreeze,true],["回到主畫面",goHome,false]],"pause")}
 function help(){
   if(screenMode==="play")freeze();const paused=screenMode==="paused";
-  showDialog("HOW TO PLAY","操作指南",'<div class="rule"><i>1</i><div><b>移槌，放開就敲</b><p>在遊戲區任意處按住並滑動，移動準星，放開就敲。電腦也能用方向鍵移動、空白鍵敲擊。</p></div></div><div class="rule"><i>2</i><div><b>對準釘心，少敲一槌</b><p>正中釘心有兩倍敲擊力。45 秒內完成前兩輪六根釘子，即可進入無限魔王關。</p></div></div><div class="rule"><i>3</i><div><b>黃圈誘敵，紅圈閃人</b><p>把追著你的黃圈帶到釘頭。圈變紅、位置固定就移開！怪物會替你打釘，<strong>藍環鎖釘只能靠牠敲入</strong>。被吸到扣四秒。</p></div></div><div class="rule"><i>4</i><div><b>五連砸，找空檔反擊</b><p>魔王關有三命。看磁怪亮燈的順序，左右閃開紅道。連砸結束後敲金釘，每三根回復一命，最多三命。存活越久，敵人越多。</p></div></div>',[[paused?"繼續遊戲":"開始遊戲",paused?unfreeze:start,true]],"help");
+  showDialog("HOW TO PLAY","操作指南",'<div class="rule"><i>1</i><div><b>移槌，放開就敲</b><p>在遊戲區任意處按住並滑動，移動準星，放開就敲。電腦也能用方向鍵移動、空白鍵敲擊。</p></div></div><div class="rule"><i>2</i><div><b>對準釘心，少敲一槌</b><p>正中釘心有兩倍敲擊力。45 秒內完成前兩輪六根釘子，即可進入無限魔王關。</p></div></div><div class="rule"><i>3</i><div><b>黃圈誘敵，紅圈閃人</b><p>把追著你的黃圈帶到釘頭。圈變紅、位置固定就移開！怪物會替你打釘，<strong>藍環鎖釘只能靠牠敲入</strong>。被吸到扣四秒。</p></div></div><div class="rule"><i>4</i><div><b>五連砸，找空檔反擊</b><p>魔王關有三命。看磁怪亮燈的順序，左右閃開紅道。最後一砸較重，半拍後金釘亮起。接下一拍敲中可加 150 分，每三根回復一命，最多三命。存活越久，敵人越多。</p></div></div>',[[paused?"繼續遊戲":"開始遊戲",paused?unfreeze:start,true]],"help");
 }
 function finish(){
   if(screenMode!=="play")return;

@@ -96,11 +96,10 @@ const PixelArt = (() => {
       const eyes=kind==="lock"||kind==="slam"?"#ffbb60":"#62efe5";if(Math.floor(t*1.4)%8||kind!=="rest"){rect(eyes,-5,-5,3,5);rect(eyes,4,-5,3,5)}else{rect(eyes,-5,-2,3,1);rect(eyes,4,-2,3,1)}
       rect("#47404b",-7,-17,13,4);rect("#e9ac49",-5,-16,4,2);rect("#e9ac49",2,-16,3,2);ctx.restore();
     }
-    function hammer(x,y,swing,t){
-      const pose=Math.min(8,Math.floor(swing*9));
+    function hammer(x,y,pose){
       const spriteLift=[8,9,10,8,4,0,2,5,8][pose];
       if (sprite(hammerFrames,pose,x-24,y-59-spriteLift,75)) return;
-      const a=swing>0?Math.sin(swing*Math.PI):0;
+      const a=pose<=5 ? pose/5 : (8-pose)/3;
       ctx.save();ctx.translate(x,y);ellipse("#573e3455",8,9,15,3);
       const lift=20+(1-a)*5;ctx.translate(2,-lift*(1-a));ctx.rotate(-.57-.21*(1-a));
       // Side, grip wraps and metal face are drawn independently to keep their silhouettes readable in motion.
@@ -163,6 +162,12 @@ const PixelArt = (() => {
       const m=s.magnet,active=!s.boss && ["track","lock","slam"].includes(m.phase);
       if(active){ellipse(m.phase==="track"?"#ffc24427":"#d734443d",m.x,m.y+1,19,11);ring(m.phase==="track"?"#f9b64c":"#f55d60",m.x,m.y+1,19,11,1.5)}
       if(s.boss) bossFormation(s);
+      if (s.boss?.phase === "counter" && !s.boss.counter) {
+        const n = s.nails[0];
+        const untilBeat = Math.max(0, 1 - 2*s.boss.clock/s.boss.beat);
+        const radius = 10 + 19*untilBeat;
+        ring("#fff099",n.x,n.y,radius,radius*.57,2);
+      }
       s.nails.slice().sort((a,b)=>a.base-b.base).forEach(nail);
       if(active && m.phase!=="track"){
         ctx.save();ctx.translate(m.x,m.y);let k=Math.max(4,16*(1-m.elapsed/.8));ring("#fff2ba",0,0,k,k*.64,1);ctx.restore()}
@@ -175,7 +180,14 @@ const PixelArt = (() => {
       // The crane stays behind the mallet until its forward lunge.
       if(!s.boss && m.phase!=="slam"&&m.phase!=="recover")magnet(mx,my,s.t,m.phase);
       const grip=s.swing>0 && s.stroke ? s.stroke : s.aim;
-      hammer(grip.x,grip.y,s.swing>0?Math.max(0,1-s.swing/.27):0,s.t);
+      let pose = 0;
+      if (s.swing > 0 && s.stroke) {
+        const elapsed = s.stroke.duration - s.swing;
+        const rebound = elapsed - swingTiming.contact - s.stroke.hold;
+        if (elapsed < swingTiming.contact) pose = Math.floor(5 * elapsed / swingTiming.contact);
+        else pose = rebound <= 0 ? 5 : Math.min(8,6 + Math.floor(3 * rebound / swingTiming.recovery));
+      }
+      hammer(grip.x,grip.y,pose);
       if(s.boss?.iframes>0)ring("#ffbd8b",px,py,15,8,1.5);
       if(!s.boss && (m.phase==="slam"||m.phase==="recover"))magnet(mx,my,s.t,m.phase==="recover"?"impact":"slam");
       for(const p of s.particles)rect(p.color,p.x,p.y,p.size,p.size);

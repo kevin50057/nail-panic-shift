@@ -30,6 +30,7 @@ const ForgeBoss = (() => {
     b.index = 0;
     b.beat = Math.max(.38, .68 - (b.wave - 1) * .028);
     b.counter = false;
+    b.onBeat = false;
     S.nails = [];
     $("wave").textContent = "魔王第 " + b.wave + " 波　" + count + " 隻";
   }
@@ -58,34 +59,46 @@ const ForgeBoss = (() => {
     n.y = n.base;
     const perfect = distance <= 5.8;
     if (perfect) S.perfect++;
-    S.points += perfect ? 300 : 180;
+    // The nail appears half a beat after the last impact. Its ring closes on the next beat.
+    b.onBeat = Math.abs(b.clock - b.beat/2) <= .115;
+    const points = (perfect ? 300 : 180) + (b.onBeat ? 150 : 0);
+    S.points += points;
+    const extraHold = b.onBeat ? .055 : .025;
+    S.stroke.hold += extraHold;
+    S.stroke.duration += extraHold;
+    S.swing += extraHold;
+    S.shake = b.onBeat ? 3 : 1.4;
     if (b.blocks % 3 === 0) b.lives = Math.min(3,b.lives+1);
     sparks(n.x,n.y,hotColors);
-    popup(perfect ? "ECHO +300" : "ECHO +180",n.x,n.y,"#ffdb76");
-    beat.perfect();
+    popup((b.onBeat ? "ON BEAT +" : "ECHO +")+points,n.x,n.y,"#ffdb76");
+    tone(210,.07,"triangle",.18,0,55);
+    tone(1180,.23,"sine",.09,.022,920);
+    if (b.onBeat) tone(1870,.35,"sine",.055,.03,1570);
   }
   function step(dt) {
     const b = S.boss;
     b.time += dt;
     b.clock += dt;
     b.iframes = Math.max(0,b.iframes-dt);
-    const duration = {ready:1.3, preview:.27, hold:.65, attack:b.beat, counter:2.4}[b.phase];
+    const duration = {ready:1.3, preview:b.beat, hold:b.beat, attack:b.beat, rest:b.beat/2, counter:2.4}[b.phase];
     if (b.clock < duration) return;
     b.clock -= duration;
     const enemy = b.order[b.index];
     if (b.phase === "ready") b.phase = "preview";
     else if (b.phase === "preview") {
-      if (++b.index === b.order.length) { b.index = 0; b.phase = "hold"; }
+      if (++b.index === Math.min(5,b.order.length)) { b.index = 0; b.phase = "hold"; }
     } else if (b.phase === "hold") b.phase = "attack";
     else if (b.phase === "attack") {
       const x = centers[enemy.lane];
       b.lastLane = enemy.lane;
       b.lastRank = enemy.row;
       b.impactTime = b.time;
-      S.shake = 2.3;
+      const finalHit = b.index === b.order.length-1;
+      S.shake = finalHit ? 4 : 2.3;
       sparks(x,12,hotColors);
       tone(155 + enemy.lane * 19,.15,"triangle",.18,0,40);
-      tone(58,.13,"sine",.24,0,34);
+      tone(finalHit ? 82 : 58,finalHit ? .155 : .105,"sine",finalHit ? .32 : .2,0,31);
+      if (finalHit) tone(285,.065,"sawtooth",.055,0,67);
       if (laneAt(S.aim.x) === enemy.lane && !b.iframes) {
         b.lives--;
         b.iframes = .85;
@@ -95,18 +108,22 @@ const ForgeBoss = (() => {
       } else if (laneAt(S.aim.x) !== enemy.lane) S.points += 20;
       if (++b.index === b.order.length) {
         b.index--;
-        b.phase = "counter";
-        S.nails = [{x,base:16,y:4,hp:1,max:1,heavy:true}];
+        b.phase = "rest";
       }
+    } else if (b.phase === "rest") {
+      b.phase = "counter";
+      S.nails = [{x:centers[enemy.lane],base:16,y:4,hp:1,max:1,heavy:true}];
     } else newVolley(b);
     if (b.phase === "preview") tone(390 + b.order[b.index].lane * 90,.08,"sine",.08);
   }
   function hint(b) {
     if (b.phase === "ready") return "三命生存 · 左右移槌閃開紅色直道";
-    if (b.phase === "preview") return "記住亮燈順序　" + (b.index+1) + " / " + b.order.length;
+    if (b.phase === "preview") return "跟著亮燈數五拍　" + (b.index+1) + " / 5";
     if (b.phase === "hold") return "準備連砸！留意木樁上的紅色直道";
     if (b.phase === "attack") return "閃開第 " + (b.order[b.index].lane+1) + " 道　" + (b.index+1) + " / " + b.order.length;
-    return b.counter ? "反擊成功 · 每三根金釘補一命" : "空檔！敲最後落點的金釘";
+    if (b.phase === "rest") return "停半拍…";
+    if (b.onBeat) return "接上了！節拍獎勵 +150";
+    return b.counter ? "反擊成功 · 每三根金釘補一命" : "輪到你！金圈收緊時敲下";
   }
   function showSequence(b) {
     const panel = $("sequence");
