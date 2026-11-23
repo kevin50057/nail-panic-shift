@@ -34,3 +34,11 @@ dialog{border:1px solid #536076;border-top:4px solid var(--gold);background:#1a2
 .dayline{display:flex;gap:8px;align-items:center;color:var(--aqua);font:700 12px ui-monospace,monospace;letter-spacing:1.5px;margin-top:2px}
 @media(max-width:550px){#lives{padding:6px}#lives i{width:22px;height:10px}#livebar>b{font-size:13px}.pop{font-size:15px}.pop.zh{font-size:17px}#bubble{font-size:13px}}
 @media(prefers-reduced-motion:reduce){.bg{transition:none}.pop{animation-duration:.01s}}
+/* ---- 難度、裝備、工單 ---- */
+.diff{display:flex;gap:6px;margin:0 0 6px;pointer-events:auto}.diff button{background:#19202be6;border:1px solid #4a5568;color:#c9d2da;font-size:13px;font-weight:800;letter-spacing:1px;padding:6px 13px;border-radius:3px;min-height:34px}.diff button[aria-pressed=true]{background:var(--aqua);border-color:var(--aqua);color:#10202a}
+#diffNote{display:block;font-size:12px;color:#b6c0cc;margin:0 0 12px;letter-spacing:.5px}.homecopy p{margin-bottom:12px}
+.perks{display:grid;gap:8px;margin-top:8px}.perk{display:grid;text-align:left;gap:2px;background:#232a37;border:1px solid #586375;border-left:4px solid var(--gold);border-radius:3px;padding:9px 12px;color:#e8edf1}.perk:hover{background:#2e3848}.perk b{font-size:15px}.perk span{font-size:13px;color:#b8c5cf;line-height:1.4}
+.grade{font:900 20px system-ui,sans-serif;margin-left:12px;vertical-align:middle}.gS{color:#9dfcf5}.gA{color:#ffce47}.gB{color:#ffa56e}.gC{color:#a0a9b5}
+.nextmod{border:1px dashed #586375;border-radius:3px;padding:7px 10px}
+#bgNight{transition:opacity 1.8s ease,filter 1.2s ease}.screen.blackout #bgNight{filter:brightness(.28)}
+@media(max-width:550px){.dialogBody{padding:18px}.resultRows div{padding:6px 0}}

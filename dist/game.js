@@ -7,6 +7,13 @@ const eIn=t=>t*t*t,eOut=t=>1-(1-t)**3,pick=a=>a[Math.floor(Math.random()*a.lengt
 const reduced=matchMedia("(prefers-reduced-motion: reduce)").matches;
 const saved=(k,f)=>{try{return localStorage.getItem(k)??f}catch{return f}},save=(k,v)=>{try{localStorage.setItem(k,v)}catch{}};
 let best=Math.max(0,parseInt(saved("nail-shift.best","0"),10)||0),soundOn=saved("nail-panic.sound","1")!=="0";
+const DIFFS=[{name:"輕鬆",lives:4,off:-4,night:8,mag:-1,mult:0.8},{name:"標準",lives:3,off:0,night:0,mag:0,mult:1},{name:"魔王",lives:2,off:8,night:-5,mag:1.5,mult:1.5}];
+let diff=clamp(parseInt(saved("nail-shift.diff","1"),10)||0,0,2);
+const MODS={drunk:{name:"師傅喝了兩杯",desc:"白班圓圈晃得厲害",mult:1.25},rush:{name:"趕工日",desc:"白班只有 22 秒，夜班多 2 根新釘",mult:1.25},flies:{name:"蒼蠅季",desc:"白班蒼蠅一直來",mult:1.15},
+  gold:{name:"發薪日",desc:"白班全是金釘，白班得分 ×2",mult:1},blackout:{name:"停電夜",desc:"夜班只剩電磁怪和準星的光",mult:1.3},rampage:{name:"電磁怪暴走",desc:"夜班電磁怪不休息，騙怪代打分數 ×2",mult:1.2}};
+const modDesc=k=>MODS[k].desc+(MODS[k].mult>1?"・全日得分 ×"+MODS[k].mult:"");
+const PERKS={glove:{name:"急救包",desc:"補 1 片 OK 繃；滿了就多 1 格"},thimble:{name:"鐵指套",desc:"每天白班擋下第一次敲到手"},lens:{name:"師傅的新眼鏡",desc:"白班比較不會敲歪"},ice:{name:"冰敷袋",desc:"手指立刻消腫，夜班準星不晃"},
+  heavy:{name:"加重槌頭",desc:"夜班每一槌多 1 倍力"},coffee:{name:"濃咖啡",desc:"夜班多 6 秒"},lure:{name:"強力誘餌",desc:"電磁怪轟擊範圍變大，容易一次砸多根"},bonus:{name:"加班費",desc:"之後所有得分 +20%"}};
 const DAY_T=30,NIGHT_T=35,HAND_R=2.0,TGT_R=1.75,AIM_R=2.05,PITCH=0.92,SW_T=0.2;
 const R=0.22,PERF=0.09,GOODR=0.19,CONTACT=0.29,PY=0.36,NL=0.9,L=2.0,A_HIT=0.12,HEADY=NL+0.05;
 const icon=(el,name)=>{el.dataset.icon=name;el.innerHTML=PixelArt.icon(name)};
@@ -22,11 +29,11 @@ const hemi=new THREE.HemisphereLight(0xfff0d8,0x4a2e1e,0.55);scene.add(hemi);
 const sun=new THREE.DirectionalLight(0xffe2b8,0.64);sun.position.set(0.35,12,0.5);sun.castShadow=true;sun.shadow.mapSize.set(1024,1024);
 Object.assign(sun.shadow.camera,{left:-6,right:6,top:7,bottom:-7,near:2,far:22});sun.shadow.bias=-0.0006;scene.add(sun);
 const fillL=new THREE.DirectionalLight(0xcfdcff,0.2);fillL.position.set(-5,5,7);scene.add(fillL);
-const magLight=new THREE.PointLight(0x62efe5,0,7,2);scene.add(magLight);
+const magLight=new THREE.PointLight(0x62efe5,0,7,2);scene.add(magLight);const aimLight=new THREE.PointLight(0xbfeaff,0,4.2,2);scene.add(aimLight);
 const ENV=[{sky:0xfff0d8,gnd:0x4a2e1e,h:0.55,sun:0xffe2b8,s:0.64,f:0.2},{sky:0x8098d8,gnd:0x121a2a,h:0.5,sun:0xffd9a0,s:0.5,f:0.1}];
-let env=0,envTarget=0;const cA=new THREE.Color(),cB=new THREE.Color();
+let env=0,envTarget=0,dark=0;const cA=new THREE.Color(),cB=new THREE.Color();
 function applyEnv(){const a=ENV[0],b=ENV[1],k=env;hemi.color.copy(cA.setHex(a.sky).lerp(cB.setHex(b.sky),k));hemi.groundColor.copy(cA.setHex(a.gnd).lerp(cB.setHex(b.gnd),k));
-  hemi.intensity=lerp(a.h,b.h,k);sun.color.copy(cA.setHex(a.sun).lerp(cB.setHex(b.sun),k));sun.intensity=lerp(a.s,b.s,k);fillL.intensity=lerp(a.f,b.f,k);}
+  hemi.intensity=lerp(a.h,b.h,k)*(1-0.9*dark);sun.color.copy(cA.setHex(a.sun).lerp(cB.setHex(b.sun),k));sun.intensity=lerp(a.s,b.s,k)*(1-0.92*dark);fillL.intensity=lerp(a.f,b.f,k)*(1-dark);}
 
 const mat=(c,o={})=>new THREE.MeshLambertMaterial(Object.assign({color:c},o));
 const phong=(c,s=60,sp=0x666666)=>new THREE.MeshPhongMaterial({color:c,shininess:s,specular:sp});
@@ -178,7 +185,7 @@ $("audio").onclick=()=>{soundOn=!soundOn;save("nail-panic.sound",soundOn?"1":"0"
 
 /* ================= state ================= */
 let mode="home",paused=false,last=0,raf=0,modal="";
-const G={day:1,score:0,lives:3,sw:{index:1,thumb:1},dayNails:0,perfects:0,baits:0,dodges:0,flies:0,combo:0,bestCombo:0,nightNails:0};
+const G={day:1,score:0,lives:3,maxLives:3,perks:{},mod:null,nextMod:null,sw:{index:1,thumb:1},dayNails:0,perfects:0,baits:0,dodges:0,flies:0,combo:0,bestCombo:0,nightNails:0};
 const D={hand:new V3(0.4,0,1),prev:new V3(),vel:new V3(),nail:null,alive:false,popT:1,respawn:0,placed:[],t:DAY_T,today:0,streak:0,ending:false,hurt:0,react:0,bent:0,good:0,perfect:0};
 const S={st:"idle",t:0,kind:"n",aimD:1,windD:0.5,strD:0.15,recD:0.4,gapD:0.3,wob:0,ph:[0,0],base:new V3(),aim:new V3(),hover:new V3(0.6,HEADY,-0.6),lock:new V3(),cur:new V3(),from:new V3(),to:new V3(),curve:false,sneeze:false,sn:0,pendingDbl:false,sinceFly:0,a:0,lift:1.5,a0:0};
 const N={aim:new V3(0,0,0.7),time:NIGHT_T,stun:0,swing:0,at:new V3(),hitDone:true,nails:[],cleared:0,lastTick:99,wob:0};
@@ -186,8 +193,11 @@ const M={phase:"off",el:0,wait:1.3,x:0,z:0,mx:0,my:9,mz:-0.8};
 const X={handOut:0,hamIn:0,masterOut:0,t:0,dropped:null};
 let tipText="",tipTime=0,tipHot=false,sayT=0,lineAt=-1;
 
-function P(){const n=G.dayNails+(G.day-1)*3;return{aim:Math.max(0.55,1.4-n*0.03),wind:Math.max(0.22,0.55-n*0.01),strike:Math.max(0.085,0.15-n*0.002),rec:Math.max(0.22,0.42-n*0.006),gap:Math.max(0.1,0.35-n*0.008),dist:Math.min(1.9,0.45+n*0.06),
-  wob:n>=6?Math.min(0.42,0.12+(n-6)*0.015):0,curve:n>=12?Math.min(0.42,0.2+(n-12)*0.012):0,sneeze:n>=18?Math.min(0.28,0.14+(n-18)*0.01):0,dbl:n>=24?Math.min(0.32,0.16+(n-24)*0.01):0,fly:n>=5?0.13:0,lead:Math.min(0.45,0.15+n*0.006)}}
+const pk=k=>G.perks[k]||0,prog=()=>G.dayNails+(G.day-1)*3+DIFFS[diff].off+(G.mod==="drunk"?7:0),nightBase=()=>NIGHT_T+DIFFS[diff].night+6*pk("coffee");
+const gain=p=>{p=Math.round(p*DIFFS[diff].mult*(1+0.2*pk("bonus"))*(G.mod?MODS[G.mod].mult:1));G.score+=p;return p};
+const sysMod=()=>G.mod?"｜"+MODS[G.mod].name:"";
+function P(){const n=prog();return{aim:Math.max(0.55,1.4-n*0.03),wind:Math.max(0.22,0.55-n*0.01),strike:Math.max(0.085,0.15-n*0.002),rec:Math.max(0.22,0.42-n*0.006),gap:Math.max(0.1,0.35-n*0.008),dist:Math.min(1.9,Math.max(0.3,0.45+n*0.06)),
+  wob:Math.max(G.mod==="drunk"?0.24:0,n>=6?Math.min(0.42,0.12+(n-6)*0.015):0),curve:n>=12?Math.min(0.42,0.2+(n-12)*0.012):0,sneeze:n>=18?Math.min(0.28,0.14+(n-18)*0.01):0,dbl:n>=24?Math.min(0.32,0.16+(n-24)*0.01):0,fly:G.mod==="flies"?0.4:n>=5?0.13:0,lead:Math.min(0.45,0.15+n*0.006)}}
 const randDir=(a,b)=>{const t=Math.random()*Math.PI*2,d=rand(a,b);return new V3(Math.cos(t)*d,0,Math.sin(t)*d)};
 const inCircle=(p,r)=>{const l=Math.hypot(p.x,p.z);if(l>r){p.x*=r/l;p.z*=r/l}return p};
 function chooseTarget(from,a,b){let bp=null,bd=-1;for(let i=0;i<12;i++){const p=inCircle(from.clone().add(randDir(a,b)),TGT_R);p.y=0;let md=9;for(const n of D.placed)md=Math.min(md,Math.hypot(n.x-p.x,n.z-p.z));if(md>0.42)return p;if(md>bd){bd=md;bp=p}}return bp}
@@ -200,12 +210,12 @@ function scr(v){const p=v.clone().project(camera);return{x:(p.x+1)/2*cw,y:(1-p.y
 function pop(text,cls,w){const s=scr(w),d=document.createElement("div");d.className="pop "+cls;d.textContent=text;d.style.left=clamp(s.x,60,cw-60)+"px";d.style.top=clamp(s.y,50,ch-30)+"px";fx.appendChild(d);setTimeout(()=>d.remove(),1000)}
 function flash(cold){const d=document.createElement("div");d.className="flash"+(cold?" cold-flash":"");fx.appendChild(d);setTimeout(()=>d.remove(),520)}
 const announce=m=>{$("announcer").textContent=m};
-function livesUI(){$("lives").innerHTML=[0,1,2].map(i=>`<i class="${i<G.lives?"":"lost"}">${PixelArt.icon("bandage")}</i>`).join("")}
+function livesUI(){$("lives").innerHTML=Array.from({length:G.maxLives},(_,i)=>i).map(i=>`<i class="${i<G.lives?"":"lost"}">${PixelArt.icon("bandage")}</i>`).join("")}
 function setWave(){const night=mode==="night"||mode==="handover";icon($("waveIcon"),night?"moon":"sun");$("waveText").textContent=`第 ${G.day} 天・${night?"夜班":"白班"}`;
   $("timeLabel").textContent=night?"夜班剩餘":"白班剩餘";$("targetLabel").textContent=night?"待敲釘數":"今日扶好";$("countUnit").textContent="根";$("modeTag").textContent=night?"NIGHT SHIFT":"DAY SHIFT"}
 const display=(el,v)=>{if(el.textContent!==v)el.textContent=v};
 function renderUI(){
-  const night=mode==="night",ho=mode==="handover";display($("timer"),String(Math.ceil(Math.max(0,night?N.time:mode==="day"?D.t:ho?NIGHT_T:0))).padStart(2,"0"));
+  const night=mode==="night",ho=mode==="handover";display($("timer"),String(Math.ceil(Math.max(0,night?N.time:mode==="day"?D.t:ho?nightBase():0))).padStart(2,"0"));
   display($("count"),String(night?N.nails.filter(n=>n.hp>0).length:ho?D.good+D.bent+nightPlan().fresh+nightPlan().heavy:D.today).padStart(2,"0"));display($("score"),String(G.score).padStart(4,"0"));display($("record"),String(Math.max(best,G.score)).padStart(4,"0"));
   let msg=tipTime>0?tipText:"",hot=tipHot&&tipTime>0;
   if(night&&N.stun<=0){if(M.phase==="track"){msg="黃圈追蹤中：把它帶到歪釘上";hot=true}else if(M.phase==="lock"||M.phase==="slam"){msg="紅圈鎖定！快閃開！";hot=true}}
@@ -214,7 +224,7 @@ function renderUI(){
   display($("hint"),msg);$("hint").classList.toggle("hot",hot);document.body.classList.toggle("danger",night&&N.time<9)}
 
 /* ================= day shift: hold the nail ================= */
-function spawnNail(){D.nail=makeNail();D.nail.scale.setScalar(0.01);D.popT=0;D.alive=true;SFX.pop()}
+function spawnNail(){D.nail=makeNail(G.mod==="gold"?gold:steel);D.nail.scale.setScalar(0.01);D.popT=0;D.alive=true;SFX.pop()}
 function leaveNail(kind,dx,dz){const n=D.nail;D.nail=null;D.alive=false;D.respawn=S.pendingDbl?0.1:0.3;n.scale.setScalar(1);n.position.set(D.hand.x,0,D.hand.z);
   if(kind==="perfect")n.position.y=-(NL-0.02);else if(kind==="good"){n.position.y=-(NL-0.02)*0.8;n.rotation.set(rand(-0.06,0.06),0,rand(-0.06,0.06))}
   else{const l=Math.hypot(dx,dz)||1;n.position.y=-0.22;n.rotation.set(dz/l*0.95,0,-dx/l*0.95)}
@@ -222,28 +232,29 @@ function leaveNail(kind,dx,dz){const n=D.nail;D.nail=null;D.alive=false;D.respaw
 function segD(px,pz,a,b){const ax=b.x-a.x,az=b.z-a.z,t=clamp(((px-a.x)*ax+(pz-a.z)*az)/(ax*ax+az*az),0,1);return Math.hypot(px-(a.x+ax*t),pz-(a.z+az*t))}
 function bodyHit(tx,tz){const lx=tx-D.hand.x,lz=tz-D.hand.z;let b=null;const chk=(pts,r,name)=>{for(let i=0;i<pts.length-1;i++){const pen=R+r-segD(lx,lz,pts[i],pts[i+1]);if(pen>0&&(!b||pen>b.pen))b={name,pen}}};
   chk(IDX,0.07*G.sw.index,"index");chk(THB,0.078*G.sw.thumb,"thumb");chk(ARM,0.17,"arm");const pp=R+0.3-Math.hypot(lx-PALM.x,lz-PALM.z);if(pp>0&&(!b||pp>b.pen))b={name:"palm",pen:pp};return b}
-function judge(tx,tz){if(D.alive&&D.popT>0.6){const d=Math.hypot(tx-D.hand.x,tz-D.hand.z);if(d<CONTACT)return{type:d<PERF?"perfect":d<GOODR?"good":"bent"}}const b=bodyHit(tx,tz);return b?{type:"ouch",b}:{type:"miss"}}
+function judge(tx,tz){if(D.alive&&D.popT>0.6){const d=Math.hypot(tx-D.hand.x,tz-D.hand.z);if(d<CONTACT)return{type:d<PERF?"perfect":d<GOODR+0.03*Math.min(2,pk("lens"))?"good":"bent"}}const b=bodyHit(tx,tz);return b?{type:"ouch",b}:{type:"miss"}}
 function contactY(tx,tz){const j=judge(tx,tz);return j.type==="ouch"?PY+(j.b.name==="arm"?0.25:0.1):j.type==="miss"?0:HEADY}
 function combo(){G.combo++;G.bestCombo=Math.max(G.bestCombo,G.combo);return Math.min(G.combo-1,6)*15}
 function dayImpact(){
   const tx=S.cur.x,tz=S.cur.z,j=judge(tx,tz),isFly=S.kind==="fly",hp=new V3(tx,S.cur.y,tz),p=P(),up=new V3(tx,1.3,tz);
   S.pendingDbl=!isFly&&S.kind!=="dbl"&&Math.random()<p.dbl;
-  if(j.type==="perfect"||j.type==="good"){const pf=j.type==="perfect",pts=(pf?150:80)+combo();G.score+=pts;G.dayNails++;D.today++;pf?(G.perfects++,D.perfect++,D.streak++):(D.good++,D.streak=0);
+  if(j.type==="perfect"||j.type==="good"){const pf=j.type==="perfect",pts=gain(((pf?150:80)+combo())*(G.mod==="gold"?2:1));G.dayNails++;D.today++;pf?(G.perfects++,D.perfect++,D.streak++):(D.good++,D.streak=0);
     leaveNail(j.type);pf?SFX.perfect():SFX.good();burst(hp,["hot","hot2"],pf?16:9,pf?3.2:2.2,0.05,0.45,2.6);G.freeze=pf?0.09:0.06;G.shake=pf?0.12:0.08;
     pop((isFly?"LUCKY ":pf?"PERFECT ":"HIT ")+"+"+pts,pf?"gold":"hit",up);
-    if(pf&&D.streak%5===0){if(G.lives<3){G.lives++;SFX.heal();livesUI();say("手很穩嘛，OK 繃還你一片。",2)}else if(D.streak===5)say("喔～手很穩嘛！",1.4)}levelLine()}
+    if(pf&&D.streak%5===0){if(G.lives<G.maxLives){G.lives++;SFX.heal();livesUI();say("手很穩嘛，OK 繃還你一片。",2)}else if(D.streak===5)say("喔～手很穩嘛！",1.4)}levelLine()}
   else if(j.type==="bent"){G.combo=0;D.streak=0;D.bent++;leaveNail("bent",D.hand.x-tx,D.hand.z-tz);SFX.bent();burst(hp,["hot"],5,1.6,0.04,0.3,1.5);G.shake=0.06;G.freeze=0.05;
     pop("BENT","grey",up);say(pick(["嘖，歪了。晚上記得處理。","歪了！夜班自己收拾喔。","這根歪了，留給晚上的你。"]),1.6)}
   else if(j.type==="miss"){SFX.thud();dent(tx,tz);burst(new V3(tx,0.02,tz),["chip"],8,1.6,0.06,0.5,1.8);G.shake=0.1;G.freeze=0.05;
-    if(isFly){G.flies++;G.score+=30;pop("DODGE +30","mint",up);say(pick(["嘖，飛走了。","蒼蠅跑得真快…"]),1.2)}else{G.combo=0;D.streak=0;pop("MISS","grey",up);if(Math.random()<0.45)say(pick(["咦？釘子呢？","你跑去哪了？","慢吞吞的！"]),1.2)}}
-  else{const nm=j.b.name;G.lives--;G.combo=0;D.streak=0;SFX.ouch();flash();G.shake=0.35;G.freeze=0.13;D.hurt=0.7;D.react=1.4;
+    if(isFly){G.flies++;pop("DODGE +"+gain(30),"mint",up);say(pick(["嘖，飛走了。","蒼蠅跑得真快…"]),1.2)}else{G.combo=0;D.streak=0;pop("MISS","grey",up);if(Math.random()<0.45)say(pick(["咦？釘子呢？","你跑去哪了？","慢吞吞的！"]),1.2)}}
+  else if(D.shield>0){D.shield--;G.combo=0;SFX.clank();G.shake=0.15;G.freeze=0.06;burst(hp,["cold2"],8,2,0.05,0.35);pop("指套擋住！","mint zh",up);say("…好險有指套。",1.4)}
+  else{const nm=j.b.name;D.hurtToday++;G.lives--;G.combo=0;D.streak=0;SFX.ouch();flash();G.shake=0.35;G.freeze=0.13;D.hurt=0.7;D.react=1.4;
     if(nm==="index"||nm==="thumb")G.sw[nm]=Math.min(1.9,G.sw[nm]+0.42);else{G.sw.index=Math.min(1.9,G.sw.index+0.18);G.sw.thumb=Math.min(1.9,G.sw.thumb+0.18)}
     buildFingers();starRing();livesUI();pop({index:"食指！！",thumb:"大拇指！！",palm:"手背！！",arm:"手臂！！"}[nm],"red zh",up);try{navigator.vibrate&&navigator.vibrate(90)}catch{}
     if(G.lives<=0)gameOver("hurt");else say(pick(["啊！抱歉抱歉…","哎呀！手放哪啦！","不痛不痛，吹一下就好。","…晚上握槌會抖喔。"]),1.6)}}
-function levelLine(){const n=G.dayNails+(G.day-1)*3,T={6:"老了…手開始有點抖。",12:"越敲越順手了！看好喔！",18:"鼻子…有點癢…",24:"來點節奏！連敲！"};if(T[n]&&lineAt!==n){lineAt=n;setTimeout(()=>say(T[n],2),350)}}
+function levelLine(){const n=prog(),T={6:"老了…手開始有點抖。",12:"越敲越順手了！看好喔！",18:"鼻子…有點癢…",24:"來點節奏！連敲！"};if(T[n]&&lineAt!==n){lineAt=n;setTimeout(()=>say(T[n],2),350)}}
 function newSwing(){const p=P();S.t=0;S.curve=false;S.sneeze=false;S.sn=0;S.wob=0;S.ph=[rand(0,6),rand(0,6)];
   if(S.pendingDbl){S.pendingDbl=false;S.kind="dbl";S.aimD=0.38;S.windD=0.16;S.strD=p.strike;S.base.copy(chooseTarget(S.lock,0.45,0.9));say("再一下！",0.7)}
-  else if(p.fly&&S.sinceFly>2&&Math.random()<p.fly){S.kind="fly";S.sinceFly=0;S.aimD=1.35;S.windD=Math.max(0.2,0.42-G.dayNails*0.004);S.strD=0.1;S.aim.set(D.hand.x,0,D.hand.z);
+  else if(p.fly&&S.sinceFly>(G.mod==="flies"?0:2)&&Math.random()<p.fly){S.kind="fly";S.sinceFly=0;S.aimD=1.35;S.windD=Math.max(0.2,0.42-G.dayNails*0.004);S.strD=0.1;S.aim.set(D.hand.x,0,D.hand.z);
     F.on=true;F.ph="in";F.t=0;F.from.set(rand(-3,3),2.4,-2.8);F.pos.copy(F.from);fly.visible=true;buzz(true,0.05);say("有蒼蠅！別動喔～",1.5)}
   else{S.kind="n";S.sinceFly++;S.aimD=p.aim;S.windD=p.wind;S.strD=p.strike;S.wob=p.wob;S.base.copy(chooseTarget(new V3(D.hand.x,0,D.hand.z),p.dist*0.5,p.dist));S.sneeze=Math.random()<p.sneeze;if(!S.sneeze)S.curve=Math.random()<p.curve}
   S.st="aim"}
@@ -278,14 +289,14 @@ function dayStep(dt){
 
 /* ================= handover: 白班 → 夜班 ================= */
 function beginHandover(){mode="handover";X.t=0;ring.visible=ghost.visible=false;S.st="idle";if(F.on){F.on=false;fly.visible=false;buzz(false)}
-  say("收工！剩下的交給你了。",2.2);SFX.bell();envTarget=1;screenEl.classList.add("night");setWave();$("sys").textContent="交班中";announce("交班：師傅下班，電磁怪醒了")}
+  say("收工！剩下的交給你了。",2.2);SFX.bell();envTarget=1;screenEl.classList.add("night");screenEl.classList.toggle("blackout",G.mod==="blackout");setWave();$("sys").textContent="交班中";announce("交班：師傅下班，電磁怪醒了")}
 function handoverStep(dt){X.t+=dt;const t=X.t;
   if(t>0.7&&D.nail&&!X.dropped){X.dropped=D.nail;D.nail=null;D.alive=false;X.dropped.userData.v=new V3(0.3,1.2,0.4)}
   if(X.dropped){const n=X.dropped,v=n.userData.v;v.y-=9*dt;n.position.addScaledVector(v,dt);n.rotation.z+=dt*6;if(n.position.y<-0.06){n.position.y=-0.06;v.set(0,0,0)}}
   X.handOut=clamp((t-0.9)/0.9,0,1);X.masterOut=clamp((t-1.0)/1.4,0,1);X.hamIn=clamp((t-1.8)/0.8,0,1);
   M.my=lerp(9,2.4,eOut(clamp((t-1.3)/1.4,0,1)));M.mx=lerp(M.mx,0,damp(3,dt));M.mz=-0.8;
   S.hover.set(master.position.x+0.6,HEADY,-1.5);poseHammer(hamM,FM,YM,S.hover,0,1.5);
-  if(t>1.6&&t-dt<=1.6){SFX.lock();tip("電磁怪醒了！",1.2,true)}
+  if(t>1.6&&t-dt<=1.6){SFX.lock();tip(G.mod==="blackout"?"停電了！只剩電磁怪和準星的光":G.mod==="rampage"?"電磁怪暴走中！牠今晚不休息":"電磁怪醒了！",1.4,true)}
   if(t>=3)startNight()}
 
 /* ================= night shift: swing the hammer ================= */
@@ -298,15 +309,15 @@ const depthOf=n=>1-(n.hp/n.max)*(1-n.d0);
 function setDepth(n){if(n.bent&&n.hp>0)return;n.mesh.position.y=-depthOf(n)*(NL-0.02)}
 const headTop=n=>n.bent&&n.hp>0?0.55:n.mesh.position.y+(NL+0.05)*n.mesh.scale.y;
 function nearestNail(x,z){let item=null,d=Infinity;for(const n of N.nails){if(n.hp<=0)continue;const g=Math.hypot(x-n.x,z-n.z);if(g<d){item=n;d=g}}return{n:item,d}}
-function nightPlan(){const lvl=Math.min(G.day-1,4);return{fresh:3+Math.floor(lvl/2),heavy:G.day>=4?2:G.day>=2?1:0}}
+function nightPlan(){const lvl=Math.min(G.day-1,8);return{fresh:3+Math.floor(lvl/2)+(G.mod==="rush"?2:0),heavy:G.day>=6?3:G.day>=4?2:G.day>=2?1:0}}
 function startNight(){mode="night";X.handOut=1;X.hamIn=1;X.masterOut=1;if(X.dropped){X.dropped.visible=false}
   N.nails.length=0;N.cleared=0;N.time=NIGHT_T;N.stun=0;N.swing=0;N.hitDone=true;N.lastTick=99;N.aim.set(0.3,0,0.8);
   for(const p of D.placed){if(p.kind==="good")makeNightNail(p.x,p.z,"left",p.mesh);else if(p.kind==="bent")makeNightNail(p.x,p.z,"bent",p.mesh)}
   const{fresh,heavy}=nightPlan();
   const spots=[...D.placed.map(p=>({x:p.x,z:p.z}))];const free=()=>{for(let i=0;i<40;i++){const p=inCircle(randDir(0.2,1.65),1.65);if(spots.every(s=>Math.hypot(s.x-p.x,s.z-p.z)>0.6)){spots.push({x:p.x,z:p.z});return p}}return inCircle(randDir(0.2,1.6),1.6)};
   for(let i=0;i<fresh;i++){const p=free();makeNightNail(p.x,p.z,"fresh")}for(let i=0;i<heavy;i++){const p=free();makeNightNail(p.x,p.z,"heavy")}
-  N.wob=(G.sw.index+G.sw.thumb-2)*0.08;const nb=N.nails.filter(n=>n.bent).length;N.time=NIGHT_T+Math.round(nb*1.5);
-  M.phase="rest";M.el=0;M.wait=1.4;setWave();$("sys").textContent="夜班中";
+  N.wob=(G.sw.index+G.sw.thumb-2)*0.08;const nb=N.nails.filter(n=>n.bent).length;N.time=nightBase()+Math.round(nb*1.5);
+  M.phase="rest";M.el=0;M.wait=1.4;setWave();$("sys").textContent="夜班中"+sysMod();
   const bent=nb;
   tip(bent?`白班留下 ${bent} 根歪釘（加班 +${Math.round(bent*1.5)} 秒）：自己敲不動，引電磁怪來敲！`:"拖曳移槌，放開敲擊。正中釘心兩倍力！",2.8,!!bent);
   if(N.wob>0)setTimeout(()=>{if(mode==="night")tip("手指還腫著…握槌會晃",1.8,true)},3000);
@@ -317,8 +328,8 @@ function strikeResolve(){const{n,d}=nearestNail(N.at.x,N.at.z),at=new V3(N.at.x,
   if(!n||d>0.34){SFX.tap();G.combo=0;pop("MISS","grey",at);dent(N.at.x,N.at.z);tip("敲空了，準星要對著釘頭",0.9);return}
   if(n.bent){SFX.clank();burst(new V3(n.x,0.5,n.z),["cold","cold2"],6,1.4,0.04,0.3);pop("LOCKED","cold",at);tip("歪釘敲不動！把黃圈帶過來，紅圈時閃開",1.6,true);return}
   scoreNight(n,d<=0.12?"perfect":"hit")}
-function scoreNight(n,kind){const bait=kind==="bait",pf=kind==="perfect",pts=(bait?220:pf?150:55)+combo();G.score+=pts;if(pf)G.perfects++;if(bait)G.baits++;
-  n.hp=Math.max(0,n.hp-(bait?99:pf?2:1));
+function scoreNight(n,kind){const bait=kind==="bait",pf=kind==="perfect",pts=gain(((bait?220:pf?150:55)+combo())*(bait&&G.mod==="rampage"?2:1));if(pf)G.perfects++;if(bait)G.baits++;
+  n.hp=Math.max(0,n.hp-(bait?99:(pf?2:1)+pk("heavy")));
   if(n.bent&&n.hp<=0){n.mesh.rotation.set(0,0,0);if(n.marker){scene.remove(n.marker);n.marker=null}}
   if(n.hp<=0){n.mesh.position.y=-(NL-0.02)+(n.kind==="heavy"?0.05:0);N.cleared++;G.nightNails++}else setDepth(n);
   const p=new V3(n.x,headTop(n),n.z);burst(p,bait?["cold","cold2"]:["hot","hot2"],bait?16:pf?14:8,bait?3:2.4,0.05,0.45,2.4);G.shake=bait?0.3:pf?0.18:0.1;G.freeze=bait?0.08:0.05;
@@ -327,49 +338,58 @@ function scoreNight(n,kind){const bait=kind==="bait",pf=kind==="perfect",pts=(ba
   if(N.nails.every(i=>i.hp<=0))nightClear()}
 function magnetImpact(){G.shake=0.27;const at=new V3(M.x,0.05,M.z);burst(at,["cold","cold2"],12,2.6,0.05,0.4,2);
   const ap=aimPoint();if(Math.hypot(M.x-ap.x,M.z-ap.z)<0.45){N.time=Math.max(0,N.time-4);N.stun=0.48;G.combo=0;SFX.caught();flash(true);pop("CAUGHT -4s","red",new V3(M.x,1.3,M.z));tip("被吸住了！扣四秒",1.45,true);return}
-  const hits=N.nails.filter(n=>n.hp>0&&Math.hypot(n.x-M.x,n.z-M.z)<=0.5);if(hits.length){hits.forEach(n=>scoreNight(n,"bait"));if(hits.length>1){const b=100*(hits.length-1);G.score+=b;pop(`×${hits.length} BAIT +${b}`,"cold",new V3(M.x,1.9,M.z))}return}
-  G.score+=30;G.dodges++;SFX.nail();pop("DODGE +30","mint",new V3(M.x,1.3,M.z));tip("閃過了！躲開電磁怪 +30",1)}
-function magnetStep(dt){M.el+=dt;const lvl=Math.min(G.day-1,4);
+  const hits=N.nails.filter(n=>n.hp>0&&Math.hypot(n.x-M.x,n.z-M.z)<=0.5+0.2*Math.min(2,pk("lure")));if(hits.length){hits.forEach(n=>scoreNight(n,"bait"));if(hits.length>1){const b=gain(100*(hits.length-1));pop(`×${hits.length} BAIT +${b}`,"cold",new V3(M.x,1.9,M.z))}return}
+  G.dodges++;SFX.nail();pop("DODGE +"+gain(30),"mint",new V3(M.x,1.3,M.z));tip("閃過了！躲開電磁怪 +30",1)}
+function magnetStep(dt){M.el+=dt;const lvl=clamp(G.day-1+DIFFS[diff].mag,-1,5.5);
   if(M.phase==="rest"){if(M.el>=M.wait){M.phase="track";M.el=0;const a=aimPoint();M.x=a.x;M.z=a.z}return}
   if(M.phase==="track"){const a=aimPoint();M.x=a.x;M.z=a.z;if(M.el>=1.05-lvl*0.07){M.phase="lock";M.el=0;SFX.lock()}return}
   if(M.phase==="lock"){if(M.el>=0.86-lvl*0.08){M.phase="slam";M.el=0}return}
   if(M.phase==="slam"){if(M.el>=0.19){M.phase="recover";M.el=0;magnetImpact()}return}
-  if(M.phase==="recover"&&M.el>=0.56){M.phase="rest";M.el=0;M.wait=1.2-lvl*0.12+Math.random()*0.42}}
+  if(M.phase==="recover"&&M.el>=0.56){M.phase="rest";M.el=0;M.wait=G.mod==="rampage"?0.15:1.2-lvl*0.12+Math.random()*0.42}}
 function nightStep(dt){
   N.time=Math.max(0,N.time-dt);const left=Math.ceil(N.time);if(left<=8&&left<N.lastTick)tone(left<=3?790:480,0.07,"triangle",0.06);N.lastTick=left;
   if(N.time<=0){gameOver("night");return}
   N.stun=Math.max(0,N.stun-dt);
   if(N.swing>0){N.swing=Math.max(0,N.swing-dt);if(!N.hitDone&&N.swing<=SW_T*0.5){N.hitDone=true;strikeResolve()}}
   magnetStep(dt)}
-function nightClear(){if(mode!=="night")return;mode="dayend";const bonus=Math.floor(N.time)*20;G.score+=bonus;SFX.bell();M.phase="off";magRing.visible=false;
+function nightClear(){if(mode!=="night")return;mode="dayend";const bonus=gain(Math.floor(N.time)*20);SFX.bell();M.phase="off";magRing.visible=false;
   setTimeout(()=>dayEndDialog(bonus),700)}
 
 /* ================= flow ================= */
 function clearBoard(){for(const p of D.placed)scene.remove(p.mesh);D.placed.length=0;for(const n of N.nails){scene.remove(n.mesh);if(n.marker)scene.remove(n.marker)}N.nails.length=0;
   dents.forEach(d=>scene.remove(d));dents.length=0;if(X.dropped){scene.remove(X.dropped);X.dropped=null}if(D.nail){scene.remove(D.nail);D.nail=null}}
-function startRun(){closeDialog();unlock();Object.assign(G,{day:1,score:0,lives:3,sw:{index:1,thumb:1},dayNails:0,perfects:0,baits:0,dodges:0,flies:0,combo:0,bestCombo:0,nightNails:0,shake:0,freeze:0});
+function startRun(){closeDialog();unlock();Object.assign(G,{day:1,score:0,lives:DIFFS[diff].lives,maxLives:DIFFS[diff].lives,perks:{},mod:null,nextMod:null,sw:{index:1,thumb:1},dayNails:0,perfects:0,baits:0,dodges:0,flies:0,combo:0,bestCombo:0,nightNails:0,shake:0,freeze:0});
   buildFingers();livesUI();lineAt=-1;
   $("home").hidden=true;canvas.hidden=false;$("livebar").hidden=false;$("hint").hidden=false;document.body.classList.add("playing");resize();
   X.handOut=1;X.masterOut=1;X.hamIn=0;master.position.x=6.5;M.my=9;startDay(true);canvas.focus({preventScroll:true});resume()}
-function startDay(first){mode="day";clearBoard();envTarget=0;screenEl.classList.remove("night");M.phase="off";magRing.visible=ret.visible=false;
-  Object.assign(D,{t:DAY_T,today:0,streak:0,ending:false,hurt:0,react:0,bent:0,good:0,perfect:0,respawn:0});D.hand.set(0.4,0,1);D.prev.copy(D.hand);D.vel.set(0,0,0);
+function startDay(first){mode="day";G.mod=first?null:G.nextMod;clearBoard();envTarget=0;screenEl.classList.remove("night","blackout");M.phase="off";magRing.visible=ret.visible=false;
+  Object.assign(D,{t:G.mod==="rush"?22:DAY_T,shield:pk("thimble"),hurtToday:0,today:0,streak:0,ending:false,hurt:0,react:0,bent:0,good:0,perfect:0,respawn:0});D.hand.set(0.4,0,1);D.prev.copy(D.hand);D.vel.set(0,0,0);
   spawnNail();S.st="gap";S.t=first?-1.0:-1.6;S.gapD=0.3;S.pendingDbl=false;S.sinceFly=0;S.hover.set(0.6,HEADY,-0.6);
-  setWave();$("sys").textContent="白班中";say(first?"新來的？釘子扶好，我來敲。":pick(["早！今天也麻煩你了。","昨晚辛苦啦，今天繼續！","手還好吧？來，扶好。"]),2.2);
-  tip(first?"拖曳畫面任何地方移動手，把釘子送到圓圈中心":"白班開始！敲歪的釘子晚上要自己處理",2.6);if(!first)SFX.bell();announce(`第 ${G.day} 天白班開始`)}
+  setWave();$("sys").textContent="白班中"+sysMod();say(first?"新來的？釘子扶好，我來敲。":pick(["早！今天也麻煩你了。","昨晚辛苦啦，今天繼續！","手還好吧？來，扶好。"]),2.2);
+  if(G.mod)tip(`今日工單：${MODS[G.mod].name}｜${modDesc(G.mod)}`,3.6,true);else tip(first?"拖曳畫面任何地方移動手，把釘子送到圓圈中心":"白班開始！敲歪的釘子晚上要自己處理",2.6);if(!first)SFX.bell();announce(`第 ${G.day} 天白班開始`)}
 function row(a,b){return"<div><span>"+a+"</span><b>"+b+"</b></div>"}
-function dayEndDialog(bonus){if(G.score>best){best=G.score;save("nail-shift.best",String(best))}renderUI();
-  showDialog("SHIFT CLEAR",`第 ${G.day} 天・打卡下班！`,'<div class="resultScore">'+String(G.score).padStart(4,"0")+'</div><p>兩班都撐過去了。明天老師傅會敲得更快。</p><div class="resultRows">'+
-    row("白班扶好",`${D.today} 根（完美 ${D.perfect}）`)+row("白班敲歪 → 夜班補救",D.bent+" 根")+row("夜班敲入",N.cleared+" 根")+row("提早收工獎勵","+"+bonus)+row("剩下的 OK 繃",G.lives+" / 3")+"</div>",
-    [["隔天上班",()=>{closeDialog();G.day++;startDay(false);resume()},true],["回主畫面",goHome,false]],"result")}
+function applyPerk(k){G.perks[k]=pk(k)+1;if(k==="glove"){if(G.lives>=G.maxLives)G.maxLives++;G.lives++}if(k==="ice")G.sw={index:1,thumb:1};buildFingers();livesUI()}
+function dayEndDialog(bonus){
+  const g=D.hurtToday===0&&D.bent===0&&N.time>=12?"S":D.hurtToday===0&&D.bent<=1?"A":D.hurtToday<=1&&D.bent<=3?"B":"C",gb=g==="S"?gain(400):g==="A"?gain(150):0;
+  if(G.score>best){best=G.score;save("nail-shift.best",String(best))}renderUI();
+  G.nextMod=Math.random()<Math.min(0.9,0.45+G.day*0.1)?pick(Object.keys(MODS).filter(k=>k!==G.mod)):null;
+  const pool=Object.keys(PERKS).filter(k=>k==="ice"?G.sw.index+G.sw.thumb>2.05:k==="glove"?G.lives<G.maxLives||G.maxLives<5:["lens","lure","thimble"].includes(k)?pk(k)<2:true).sort(()=>Math.random()-0.5).slice(0,3);
+  showDialog("SHIFT CLEAR",`第 ${G.day} 天・打卡下班！`,'<div class="resultScore">'+String(G.score).padStart(4,"0")+'<span class="grade g'+g+'">'+g+' 級</span></div><div class="resultRows">'+
+    row("白班扶好／敲歪",`${D.today}／${D.bent} 根`)+row("夜班敲入",N.cleared+" 根")+row("提早收工＋評等獎勵","+"+(bonus+gb))+row("OK 繃",G.lives+" / "+G.maxLives)+'</div>'+
+    '<p class="nextmod">'+(G.nextMod?"<strong>明日工單："+MODS[G.nextMod].name+"</strong><br>"+modDesc(G.nextMod):"明日工單：普通的一天")+'</p><p>挑一樣帶去明天：</p><div class="perks" id="perks"></div>',
+    [["回主畫面",goHome,false]],"result");
+  for(const k of pool){const b=document.createElement("button");b.className="perk";b.dataset.perk=k;b.innerHTML="<b>"+PERKS[k].name+(pk(k)?"（已有 "+pk(k)+"）":"")+"</b><span>"+PERKS[k].desc+"</span>";
+    b.onclick=()=>{applyPerk(k);closeDialog();G.day++;startDay(false);resume()};$("perks").append(b)}
+  $("perks").querySelector("button")?.focus({preventScroll:true})}
 function gameOver(why){if(mode==="over")return;const prev=mode;mode="over";S.st=S.st==="idle"?"idle":"rec";S.t=0;M.phase="off";magRing.visible=false;if(F.on){F.on=false;fly.visible=false;buzz(false)}
   if(why==="hurt")say("…今天先這樣，去擦藥吧。",3);SFX.over();
   setTimeout(()=>{const high=G.score>best;if(high){best=G.score;save("nail-shift.best",String(best))}renderUI();
     showDialog(why==="hurt"?"GAME OVER":"TIME UP",why==="hurt"?"送醫了！":"夜班沒做完！",'<div class="resultScore">'+String(G.score).padStart(4,"0")+'</div><p>'+(high?"本機最高分更新！":why==="hurt"?"OK 繃用完了，手指需要休息。":"下班鈴響了，釘子還沒敲完。")+'</p><div class="resultRows">'+
-      row("撐到",`第 ${G.day} 天・${prev==="night"?"夜班":"白班"}`)+row("白班扶好",G.dayNails+" 根")+row("正中釘心",G.perfects+" 槌")+row("夜班敲入",G.nightNails+" 根")+row("騙怪代打",G.baits+" 根")+row("閃過",(G.dodges+G.flies)+" 次")+row("最長連擊",G.bestCombo)+"</div>",
+      row("難度",DIFFS[diff].name)+row("撐到",`第 ${G.day} 天・${prev==="night"?"夜班":"白班"}`)+row("白班扶好",G.dayNails+" 根")+row("正中釘心",G.perfects+" 槌")+row("夜班敲入",G.nightNails+" 根")+row("騙怪代打",G.baits+" 根")+row("閃過",(G.dodges+G.flies)+" 次")+row("最長連擊",G.bestCombo)+"</div>",
       [["重新上班",startRun,true],["回主畫面",goHome,false]],"result")},why==="hurt"?1300:500)}
-function goHome(){closeDialog();mode="home";paused=false;cancelAnimationFrame(raf);clearBoard();document.body.classList.remove("playing","danger");screenEl.classList.remove("night");
+function goHome(){closeDialog();mode="home";paused=false;cancelAnimationFrame(raf);clearBoard();document.body.classList.remove("playing","danger");screenEl.classList.remove("night","blackout");
   $("home").hidden=false;canvas.hidden=true;$("livebar").hidden=true;$("hint").hidden=true;$("sys").textContent="待機中";$("modeTag").textContent="SHIFT CHANGE";
-  $("timeLabel").textContent="白班";$("timer").textContent=String(DAY_T);$("targetLabel").textContent="夜班";$("count").textContent=String(NIGHT_T);$("countUnit").textContent="秒";$("score").textContent="0000";$("record").textContent=String(best).padStart(4,"0");
+  $("timeLabel").textContent="白班";$("timer").textContent=String(DAY_T);$("targetLabel").textContent="夜班";$("count").textContent=String(NIGHT_T+DIFFS[diff].night);$("countUnit").textContent="秒";$("score").textContent="0000";$("record").textContent=String(best).padStart(4,"0");
   bubble.classList.remove("on");buzz(false);$("start").focus({preventScroll:true})}
 
 /* ================= dialogs (cabinet style) ================= */
@@ -378,13 +398,14 @@ function showDialog(tag,title,content,actions,kind){const d=$("dialog");modal=ki
   d.setAttribute("aria-labelledby","dialogTitle");if(!d.open)d.showModal();$("dialogActions").querySelector("button")?.focus({preventScroll:true})}
 function closeDialog(){modal="";if($("dialog").open)$("dialog").close()}
 const playing=()=>["day","handover","night"].includes(mode);
-function pause(){if(!playing()||paused)return;paused=true;drag=null;keys.clear();buzz(false);$("sys").textContent="已暫停";showDialog("PAUSE","暫停中","<p>時間停在這一刻。</p>",[["繼續遊戲",unpause,true],["回到主畫面",goHome,false]],"pause")}
-function unpause(){closeDialog();paused=false;$("sys").textContent=mode==="night"?"夜班中":"白班中";if(F.on)buzz(true,0.04);canvas.focus({preventScroll:true});resume()}
+function pause(){if(!playing()||paused)return;paused=true;drag=null;keys.clear();buzz(false);$("sys").textContent="已暫停";showDialog("PAUSE","暫停中","<p>時間停在這一刻。</p><p>難度："+DIFFS[diff].name+(G.mod?"<br>今日工單：<strong>"+MODS[G.mod].name+"</strong>　"+modDesc(G.mod):"")+"<br>裝備："+(Object.keys(G.perks).map(k=>PERKS[k].name+(pk(k)>1?" ×"+pk(k):"")).join("、")||"還沒有")+"</p>",[["繼續遊戲",unpause,true],["回到主畫面",goHome,false]],"pause")}
+function unpause(){closeDialog();paused=false;$("sys").textContent=(mode==="night"?"夜班中":"白班中")+sysMod();if(F.on)buzz(true,0.04);canvas.focus({preventScroll:true});resume()}
 function help(){if(mode==="dayend"||mode==="over")return;const wasPlaying=playing()&&!paused;if(wasPlaying){paused=true;drag=null;keys.clear()}
   showDialog("HOW TO PLAY","操作指南",
   '<div class="shiftcard"><i>'+PixelArt.icon("sun")+'</i><div><b>白班：扶釘子（30 秒）</b><p>拖曳畫面任何地方移動手。老師傅瞄哪裡就把釘子送過去，圓圈變紅就要落鎚了。正中＝釘平，擦到邊＝<strong>歪釘</strong>，敲到手指會腫、少一片 OK 繃。</p></div></div>'+
   '<div class="shiftcard"><i>'+PixelArt.icon("moon")+'</i><div><b>夜班：自己掄槌（35 秒）</b><p>拖曳移槌、放開敲擊（電腦用方向鍵＋空白鍵）。白班凸出來的釘子要補敲，正中釘心兩倍力。<strong>白班的歪釘你敲不動</strong>：把追著你的黃圈帶過去，紅圈鎖定就閃開，讓電磁怪代打。被吸到扣 4 秒。</p></div></div>'+
-  '<div class="shiftcard"><i>'+PixelArt.icon("bandage")+'</i><div><b>兩班互相影響</b><p>白班手指被敲腫，夜班握槌會晃。OK 繃用完或夜班沒敲完就結束；撐過去就隔天再上班，越來越難。</p></div></div>',
+  '<div class="shiftcard"><i>'+PixelArt.icon("bandage")+'</i><div><b>兩班互相影響</b><p>白班手指被敲腫，夜班握槌會晃。OK 繃用完或夜班沒敲完就結束；撐過去就隔天再上班，越來越難。</p></div></div>'+
+  '<div class="shiftcard"><i>'+PixelArt.icon("trophy")+'</i><div><b>裝備、工單、難度</b><p>每天過關可以三選一帶一樣裝備。第 2 天起可能抽到特殊工單（停電夜、蒼蠅季、電磁怪暴走…），難但分數加成。難度在主畫面選：輕鬆 ×0.8、標準 ×1、魔王 ×1.5。</p></div></div>',
   [[wasPlaying?"繼續遊戲":mode==="home"?"開始上班":"知道了",wasPlaying?unpause:mode==="home"?startRun:closeDialog,true]],"help")}
 function dismiss(){if(modal==="result")goHome();else if(paused)unpause();else closeDialog()}
 $("start").onclick=startRun;$("help").onclick=help;$("pause").onclick=pause;$("close").onclick=dismiss;$("dialog").addEventListener("cancel",e=>{e.preventDefault();dismiss()});
@@ -425,7 +446,7 @@ function step(dt){
   for(let i=parts.length-1;i>=0;i--){const m=parts[i],u=m.userData;u.life-=dt;u.v.y-=9*dt;m.position.addScaledVector(u.v,dt);if(m.position.y<0.01){m.position.y=0.01;u.v.multiplyScalar(0.3)}m.rotation.x+=dt*9;m.scale.setScalar(Math.max(0.001,m.scale.x*(u.life>0?Math.pow(Math.max(0.01,u.life/u.max),dt*3):0)));if(u.life<=0){scene.remove(m);parts.splice(i,1)}}
   tipTime=Math.max(0,tipTime-dt)}
 function visuals(rdt){const now=performance.now()/1000;
-  env=lerp(env,envTarget,damp(1.6,rdt));applyEnv();
+  env=lerp(env,envTarget,damp(1.6,rdt));dark=lerp(dark,mode==="night"&&G.mod==="blackout"?1:0,damp(1.5,rdt));applyEnv();
   D.hurt=Math.max(0,D.hurt-rdt);D.react=Math.max(0,D.react-rdt);
   // apprentice hand (slides out at night)
   const hk=D.hurt/0.7,sx=(Math.random()-0.5)*0.07*hk,sz=(Math.random()-0.5)*0.07*hk,dip=D.hurt>0?-0.14*Math.sin(Math.PI*Math.min(1,(0.7-D.hurt)/0.3)):0,ho=eOut(X.handOut);
@@ -451,7 +472,7 @@ function visuals(rdt){const now=performance.now()/1000;
   if(hamP.visible){const sw=N.swing>0?Math.sin((1-N.swing/SW_T)*Math.PI):0,at=N.swing>0?N.at:ap,nn=nearestNail(at.x,at.z),cy=nn.n&&nn.d<=0.34?headTop(nn.n):0,stunLift=N.stun>0?0.7*(N.stun/0.48):0;
     tmp.set(at.x+(1-hi)*2.5,cy,at.z+(1-hi)*2.8);poseHammer(hamP,FP,YP,tmp,lerp(-0.5,A_HIT,sw),(1-sw)*0.85+Math.sin(now*2.4)*0.03+stunLift+(1-hi)*1.2);
     placeSeg(pSleeve,hamP.position,hamP.position.clone().add(new V3(0.55,0.5,0.75)),0.17)}
-  ret.visible=night;if(night){ret.position.set(ap.x,0.03,ap.z);const nn=nearestNail(ap.x,ap.z);retTint(N.stun>0?0xfc6660:nn.n&&nn.d<=0.34?(nn.n.bent?0x7bf4f0:0xefffd6):0x69e7de)}
+  aimLight.intensity=dark*1.5;aimLight.position.set(ap.x,1.1,ap.z);ret.visible=night;if(night){ret.position.set(ap.x,0.03,ap.z);const nn=nearestNail(ap.x,ap.z);retTint(N.stun>0?0xfc6660:nn.n&&nn.d<=0.34?(nn.n.bent?0x7bf4f0:0xefffd6):0x69e7de)}
   // magnet
   const mag=M.phase;let my=M.my,mx=M.mx,mz=M.mz;
   if(mode==="night"||mode==="dayend"||mode==="over"){
@@ -461,8 +482,8 @@ function visuals(rdt){const now=performance.now()/1000;
   else if(mode==="day"){my=lerp(M.my,9,damp(2,rdt))}
   M.mx=mx;M.my=my;M.mz=mz;magnet.position.set(mx,my,mz);magnet.visible=my<8.9;magnet.rotation.z=mag==="lock"?Math.sin(now*40)*0.04:Math.sin(now*1.3)*0.05;
   const hotEye=mag==="lock"||mag==="slam";magEyeM.color.setHex(hotEye?0xffbb60:0x62efe5);magEyes.forEach(e=>e.scale.y=mag==="rest"&&Math.floor(now*1.4)%8===0?0.25:1);
-  magLight.position.set(mx,my-0.3,mz);magLight.intensity=env*(hotEye?1.4:0.8);magLight.color.setHex(hotEye?0xffa060:0x62efe5);
-  magRing.visible=night&&(mag==="track"||mag==="lock"||mag==="slam");if(magRing.visible){magRing.position.set(M.x,0.025,M.z);const tr=mag==="track";magFill.material.color.setHex(tr?0xffc244:0xd73444);magEdge.material.color.setHex(tr?0xf9b64c:0xf55d60);
+  magLight.position.set(mx,my-0.3,mz);magLight.intensity=env*(hotEye?1.4:0.8)*(1+dark);magLight.color.setHex(hotEye?0xffa060:0x62efe5);
+  magRing.visible=night&&(mag==="track"||mag==="lock"||mag==="slam");if(magRing.visible){magRing.position.set(M.x,0.025,M.z);magRing.scale.setScalar(1+0.4*Math.min(2,pk("lure")));const tr=mag==="track";magFill.material.color.setHex(tr?0xffc244:0xd73444);magEdge.material.color.setHex(tr?0xf9b64c:0xf55d60);
     magShrink.visible=!tr;if(!tr)magShrink.scale.setScalar(Math.max(0.1,0.4*(1-(mag==="lock"?M.el/0.8:1))))}
   for(const n of N.nails)if(n.marker){n.marker.scale.setScalar(1+Math.sin(now*4+n.bob)*0.06)}
   for(let i=stars.length-1;i>=0;i--){const m=stars[i],u=m.userData;u.life-=rdt;u.a+=rdt*6;m.position.set(hand.position.x-0.3+Math.cos(u.a)*0.32,PY+0.55+Math.sin(u.a*2)*0.05,hand.position.z+Math.sin(u.a)*0.32);m.rotation.y+=rdt*8;if(u.life<=0){scene.remove(m);stars.splice(i,1)}}
@@ -477,6 +498,8 @@ function frame(now){if(mode==="home")return;const rdt=Math.min(0.05,(now-last)/1
   renderer.render(scene,camera);if(!paused)raf=requestAnimationFrame(frame)}
 function resume(){cancelAnimationFrame(raf);last=performance.now();raf=requestAnimationFrame(frame)}
 
-$("record").textContent=String(best).padStart(4,"0");resize();
+function diffUI(){$("diff").replaceChildren(...DIFFS.map((d,i)=>{const b=document.createElement("button");b.textContent=d.name;b.setAttribute("aria-pressed",String(i===diff));b.onclick=()=>{diff=i;save("nail-shift.diff",String(i));diffUI()};return b}));
+  $("diffNote").textContent=`OK 繃 ${DIFFS[diff].lives} 片・夜班 ${NIGHT_T+DIFFS[diff].night} 秒・得分 ×${DIFFS[diff].mult}`;if(mode==="home")$("count").textContent=String(NIGHT_T+DIFFS[diff].night)}
+diffUI();$("record").textContent=String(best).padStart(4,"0");resize();
 if(location.hash==="#debug")window.__shift={scene,G,D,S,N,M,X,get mode(){return mode},startRun,gameOver};
 })();
