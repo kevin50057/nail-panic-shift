@@ -478,7 +478,7 @@ function gameOver(why){if(mode==="over")return;const prev=mode;mode="over";S.st=
   setTimeout(()=>{const high=G.score>best;if(high){best=G.score;save("nail-shift.best",String(best))}renderUI();
     showDialog(why==="hurt"?"GAME OVER":"TIME UP",why==="hurt"?"送醫了！":"夜班沒做完！",'<div class="resultScore">'+String(G.score).padStart(4,"0")+'</div><p>'+(high?"本機最高分更新！":why==="hurt"?"OK 繃用完了，手指需要休息。":"下班鈴響了，釘子還沒敲完。")+'</p><div class="resultRows">'+
       row("難度",DIFFS[diff].name)+row("撐到",`第 ${G.day} 天・${prev==="night"?"夜班":"白班"}`)+row("白班扶好",G.dayNails+" 根")+row("正中釘心",G.perfects+" 槌")+row("夜班敲入",G.nightNails+" 根")+row("騙怪代打",G.baits+" 根")+row("閃過",(G.dodges+G.flies)+" 次")+row("最長連擊",G.bestCombo)+"</div>"+
-      Board.panel(Board.add("main",{score:G.score,note:DIFFS[diff].name+"・第 "+G.day+" 天",lines:["難度 "+DIFFS[diff].name+"・撐到第 "+G.day+" 天"+(prev==="night"?"夜班":"白班"),"正中釘心 "+G.perfects+" 槌・最長連擊 "+G.bestCombo]})),
+      Board.panel(Board.add("main",{score:G.score,day:G.day,note:DIFFS[diff].name+"・第 "+G.day+" 天",lines:["難度 "+DIFFS[diff].name+"・撐到第 "+G.day+" 天"+(prev==="night"?"夜班":"白班"),"正中釘心 "+G.perfects+" 槌・最長連擊 "+G.bestCombo]})),
       [["重新上班",startRun,true],["回主畫面",goHome,false]],"result")},why==="hurt"?1300:500)}
 function goHome(){closeDialog();mode="home";paused=false;cancelAnimationFrame(raf);clearBoard();document.body.classList.remove("playing","danger");screenEl.classList.remove("night","blackout");
   $("home").hidden=false;canvas.hidden=true;$("livebar").hidden=true;$("hint").hidden=true;$("sys").textContent="待機中";$("modeTag").textContent="SHIFT CHANGE";

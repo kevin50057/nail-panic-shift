@@ -1,0 +1,15 @@
+# Cloudflare Workers：遊戲網站（dist/）＋全球排行榜 API。
+# 部署由 .github/workflows/deploy.yml 自動完成；database_id 會在部署時自動填入。
+name = "nail-panic"
+main = "src/index.js"
+compatibility_date = "2026-11-01"
+
+[assets]
+directory = "../dist"
+binding = "ASSETS"
+run_worker_first = ["/api/*"]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "nail-panic-board"
+database_id = "local-dev-placeholder"

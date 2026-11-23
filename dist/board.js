@@ -12,6 +12,21 @@ const Board = (() => {
   const clean = s => String(s || "").replace(/\s+/g, " ").trim().slice(0, 12);
   let name = clean(read("nail-shift.name", ""));
 
+  // ── 全球榜（Cloudflare Worker）：同網站的 /api，或用 <meta name="board-api" content="https://…/api"> 指定 ──
+  const API = (document.querySelector('meta[name="board-api"]')?.content || "/api").replace(/\/$/, "");
+  let pid = read("nail-shift.pid", "");
+  if (!/^[a-z0-9]{12,40}$/.test(pid)) { pid = Array.from(crypto.getRandomValues(new Uint8Array(20)), b => "abcdefghijklmnopqrstuvwxyz0123456789"[b % 36]).join(""); write("nail-shift.pid", pid); }
+  const withTimeout = (p, ms) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error("timeout")), ms))]);
+  let pinged = null;
+  const online = () => pinged ||= withTimeout(fetch(API + "/ping", {cache: "no-store"}), 4000)
+    .then(r => r.ok ? r.json() : null).then(j => !!(j && j.ok)).catch(() => false);
+  async function api(path, body) {
+    const r = await withTimeout(fetch(API + path, body ? {method: "POST", headers: {"content-type": "application/json"}, body: JSON.stringify(body)} : {cache: "no-store"}), 6000);
+    let j = null; try { j = await r.json(); } catch {}
+    if (!r.ok || !j || !j.ok) throw new Error((j && j.error) || "http " + r.status);
+    return j;
+  }
+
   function add(mode, e) {
     const list = load(mode);
     const entry = Object.assign({id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), name, at: Date.now()}, e);
@@ -47,6 +62,8 @@ const Board = (() => {
       '<div class="boardHead"><b>' + (r.rank === 1 ? "🏆 本機第 1 名！" : "本機第 " + r.rank + " 名") + '</b><span>' + esc(MODES[r.mode]) + "・共 " + r.total + " 筆</span></div>" +
       '<label class="boardName">上榜名字<input maxlength="12" placeholder="想留名就打（可不填）" value="' + esc(name) + '" autocomplete="nickname" enterkeyhint="done"></label>' +
       '<ol class="boardList">' + table(r) + "</ol>" +
+      '<div class="globalBox" hidden><div class="boardHead"><b>🌏 全球排行</b><span class="gStat">讀取中…</span></div>' +
+      '<button class="primary upBtn" type="button">上傳到全球榜</button><p class="gMsg"></p><ol class="boardList gList"></ol></div>' +
       '<button class="secondary shareBtn" type="button">分享成績卡</button><div class="shareOut" hidden></div></section>';
   }
 
@@ -58,6 +75,40 @@ const Board = (() => {
     input.addEventListener("input", commit);
     input.addEventListener("keydown", e => { e.stopPropagation(); if (e.key === "Enter") { e.preventDefault(); input.blur(); } });
     root.querySelector(".shareBtn").onclick = () => { commit(); share(r, root.querySelector(".shareOut")); };
+    wireGlobal(r, root, input);
+  }
+
+  const gRows = list => list.map(x => '<li class="' + (x.me ? "me" : "") + (x.rank <= 3 ? " top" + x.rank : "") + '"><i>' + x.rank + "</i><span>" + esc(x.name) +
+    "</span><small>" + esc(x.note || "") + "</small><b>" + x.score + "</b></li>").join("") || '<li class="empty"><span>還沒有人上榜，搶第一！</span></li>';
+  const ERR = {"name rejected": "這個名字不能用，換一個吧。", "score rejected": "這個分數怪怪的，沒辦法上傳。", "too fast": "送太快了，等幾秒再試。"};
+
+  async function wireGlobal(r, root, input) {
+    if (!(await online())) return;                 // Claude 卡片等無法連線的地方：只留本機榜
+    const box = root.querySelector(".globalBox"), stat = box.querySelector(".gStat"), msg = box.querySelector(".gMsg"),
+      list = box.querySelector(".gList"), btn = box.querySelector(".upBtn");
+    box.hidden = false;
+    const unit = r.mode === "boss" ? "wave" : "day";
+    const refresh = async () => {
+      try {
+        const j = await api("/top?mode=" + r.mode + "&limit=10&pid=" + pid);
+        list.innerHTML = gRows(j.list);
+        stat.textContent = "共 " + j.total + " 人" + (j.mine ? "・你的最佳 " + j.mine.best + "（第 " + j.mine.rank + " 名）" : "");
+      } catch { stat.textContent = "暫時連不上"; }
+    };
+    const sync = () => { const ok = !!clean(input.value); btn.disabled = !ok || btn.dataset.busy === "1"; btn.textContent = r.global ? "更新名字／重新上傳" : ok ? "上傳到全球榜" : "先填名字才能上傳"; };
+    input.addEventListener("input", sync); sync(); refresh();
+    btn.onclick = async () => {
+      if (!clean(input.value)) return;
+      btn.dataset.busy = "1"; sync(); msg.textContent = "上傳中…"; msg.className = "gMsg";
+      try {
+        const j = await api("/submit", {mode: r.mode, pid, name: clean(input.value), score: r.entry.score, note: r.entry.note || "", [unit]: r.entry[unit] || 1});
+        r.global = {rank: j.rank, total: j.total, best: j.best};
+        msg.textContent = j.improved ? "上榜了！全球第 " + j.rank + " 名（共 " + j.total + " 人）" : "名字已更新。你的最佳紀錄 " + j.best + " 分，全球第 " + j.rank + " 名";
+        msg.className = "gMsg ok";
+        await refresh();
+      } catch (e) { msg.textContent = ERR[e.message] || "連不上排行榜，等一下再試。"; msg.className = "gMsg bad"; }
+      btn.dataset.busy = ""; sync();
+    };
   }
 
   // ── 成績卡（像素風 PNG）──
@@ -76,7 +127,8 @@ const Board = (() => {
     g.fillStyle = "#ffffff"; g.font = font("900", 44); g.fillText(e.name || "無名學徒", W / 2, 325);
     g.fillStyle = "#ffad4c"; g.font = font("900", 128); g.fillText(String(e.score), W / 2, 460);
     g.fillStyle = "#c1c8d0"; g.font = font("700", 26); g.fillText("分", W / 2, 500);
-    g.fillStyle = r.rank <= 3 ? "#ffd766" : "#8fb4e8"; g.font = font("900", 44); g.fillText("本機排行第 " + r.rank + " 名", W / 2, 590);
+    const where = r.global ? "全球第 " + r.global.rank + " 名" : "本機排行第 " + r.rank + " 名", top3 = (r.global ? r.global.rank : r.rank) <= 3;
+    g.fillStyle = top3 ? "#ffd766" : "#8fb4e8"; g.font = font("900", 44); g.fillText(where, W / 2, 590);
     g.fillStyle = "#e8edf1"; g.font = font("500", 28);
     (e.lines || []).slice(0, 3).forEach((t, i) => g.fillText(t, W / 2, 660 + i * 44));
     g.fillStyle = "#ffc94a"; g.font = font("900", 34); g.fillText("來挑戰我！", W / 2, 820);
@@ -87,15 +139,17 @@ const Board = (() => {
   }
 
   async function share(r, out) {
-    const c = card(r), e = r.entry;
-    const text = (e.name || "無名學徒") + " 在《NAIL PANIC! 最後一槌》" + MODES[r.mode] + "拿下 " + e.score + " 分（本機第 " + r.rank + " 名）！" +
-      ((e.lines || [])[0] ? "　" + e.lines[0] : "") + "　來挑戰我！";
+    const e = r.entry, where = r.global ? "全球第 " + r.global.rank + " 名" : "本機第 " + r.rank + " 名";
+    const text = (e.name || "無名學徒") + " 在《NAIL PANIC! 最後一槌》" + MODES[r.mode] + "拿下 " + e.score + " 分（" + where + "）！" +
+      ((e.lines || [])[0] ? "　" + e.lines[0] : "") + "　來挑戰我！" + (location.protocol === "https:" && !/claude/.test(location.host) ? " " + location.origin + "/" : "");
+    // 複製要在點擊當下做（之後有 await 就可能被瀏覽器拒絕）
+    const copying = navigator.clipboard ? navigator.clipboard.writeText(text).then(() => true, () => false) : Promise.resolve(false);
+    const c = card(r);
     const blob = await new Promise(res => c.toBlob(res, "image/png"));
     const url = URL.createObjectURL(blob);
     // 一律顯示圖片：分享視窗被擋時，長按圖片也能存。
     out.hidden = false;
-    let copied = false;
-    try { await navigator.clipboard.writeText(text); copied = true; } catch {}
+    const copied = await copying;
     out.innerHTML = '<img alt="成績卡" src="' + url + '"><p>長按（或右鍵）圖片即可儲存' + (copied ? "；分享文字已複製，貼給朋友就好。" : "。") + '</p>';
     try {
       const file = new File([blob], "nail-panic-score.png", {type: "image/png"});

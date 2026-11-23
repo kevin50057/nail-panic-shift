@@ -178,7 +178,7 @@ function finish(){
   const row=(label,value)=>'<div><span>'+label+'</span><b>'+value+'</b></div>';
   const results=boss ? row("抵達波次",boss.wave)+row("存活時間",Math.floor(boss.time)+" 秒")+row("敲入釘子",boss.blocks+" 根") : row("熱身釘數",S.cleared+" / 6");
   const summary='<div class="resultScore">'+S.points+'</div><p>'+(high?"本機最高分更新！":boss?"師傅搖搖頭：節奏再練練。":"下班鈴響了。")+'</p><div class="resultRows">'+results+row("正中釘心",S.perfect+" 槌")+'</div>';
-  const board=boss?Board.panel(Board.add("boss",{score:S.points,note:"第 "+boss.wave+" 波・♩="+Math.round(60/boss.beat),lines:["撐到第 "+boss.wave+" 波・♩="+Math.round(60/boss.beat),"敲入釘子 "+boss.blocks+" 根・存活 "+Math.floor(boss.time)+" 秒"]})):"";
+  const board=boss?Board.panel(Board.add("boss",{score:S.points,wave:boss.wave,note:"第 "+boss.wave+" 波・♩="+Math.round(60/boss.beat),lines:["撐到第 "+boss.wave+" 波・♩="+Math.round(60/boss.beat),"敲入釘子 "+boss.blocks+" 根・存活 "+Math.floor(boss.time)+" 秒"]})):"";
   showDialog(boss?"BOSS RUSH":"TIME UP",boss?"最後一命用完了":"收工時間到！",summary+board,[[boss?"再戰魔王":"再玩一局",()=>start(Boolean(boss)),true],["主畫面",goHome,false]],"result");
 }
 function dismiss(){if(modal==="result")goHome();else if(screenMode==="paused")unfreeze();else closeDialog()}

@@ -1,0 +1,74 @@
+# 推到 main 就自動部署到 Cloudflare：遊戲網站（dist/）＋全球排行榜 API（cloud/）。
+# 需要兩個 repository secrets：CLOUDFLARE_API_TOKEN、CLOUDFLARE_ACCOUNT_ID（設定方式見 cloud/README.md）。
+# 沒設定 secrets 時這個流程會直接略過，不會失敗。
+name: Deploy to Cloudflare
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: cloudflare-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    defaults:
+      run:
+        working-directory: cloud
+    steps:
+      - name: Check secrets
+        id: secrets
+        working-directory: .
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
+            echo "::warning::還沒設定 CLOUDFLARE_API_TOKEN / CLOUDFLARE_ACCOUNT_ID，這次不部署。"
+            echo "ready=no" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=yes" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.secrets.outputs.ready == 'yes'
+
+      - uses: actions/setup-node@v4
+        if: steps.secrets.outputs.ready == 'yes'
+        with:
+          node-version: 22
+
+      - name: Install Wrangler
+        if: steps.secrets.outputs.ready == 'yes'
+        run: npm install --global wrangler@4.158.0
+
+      - name: Create the D1 database if it does not exist
+        if: steps.secrets.outputs.ready == 'yes'
+        run: |
+          find_id() {
+            wrangler d1 list --json | node -e '
+              let s = ""; process.stdin.on("data", d => s += d).on("end", () => {
+                const list = JSON.parse(s.slice(s.indexOf("[")));
+                const db = list.find(x => x.name === "nail-panic-board");
+                process.stdout.write(db ? String(db.uuid || db.id || db.database_id || "") : "");
+              });'
+          }
+          id="$(find_id)"
+          if [ -z "$id" ]; then
+            wrangler d1 create nail-panic-board
+            id="$(find_id)"
+          fi
+          if [ -z "$id" ]; then echo "::error::找不到也建不出 D1 資料庫 nail-panic-board"; exit 1; fi
+          sed -i "s/^database_id = .*/database_id = \"$id\"/" wrangler.toml
+          echo "D1 database id: $id"
+
+      - name: Apply the leaderboard schema
+        if: steps.secrets.outputs.ready == 'yes'
+        run: wrangler d1 execute nail-panic-board --remote --file=schema.sql
+
+      - name: Deploy
+        if: steps.secrets.outputs.ready == 'yes'
+        run: wrangler deploy
